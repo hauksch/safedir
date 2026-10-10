@@ -1,0 +1,33 @@
+[package]
+name = "safedir"
+description = "Resolve German justice ERV recipients by SAFE-ID: SAFE directory entries, addressability, SPML/VAS client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+readme = "../README.md"
+
+[features]
+default = ["x509"]
+# Parse X.509 validity windows of referenced certificates. Without it,
+# certificates stay opaque (PEM + fingerprint) and expiry checks degrade
+# to `CertsValidityUnknown`.
+x509 = ["dep:x509-parser"]
+# Live SPML 2.0 / SOAP client against the Virtueller Attribut-Service (VAS).
+# Mock-tested only: the production endpoint and its authentication are handed
+# out via the BLK-AG IT-Standards registration procedure.
+vas = ["dep:reqwest", "dep:quick-xml"]
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+base64.workspace = true
+x509-parser = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+quick-xml = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json.workspace = true
+proptest.workspace = true

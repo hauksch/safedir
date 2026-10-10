@@ -1,0 +1,29 @@
+[workspace]
+resolver = "3"
+members = ["crates/safedir", "crates/safedir-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.85"
+
+[workspace.dependencies]
+safedir = { path = "crates/safedir" }
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+base64 = "0.22"
+x509-parser = "0.17"
+reqwest = { version = "0.12", default-features = false, features = [
+    "blocking",
+    "rustls-tls",
+] }
+quick-xml = "0.38"
+clap = { version = "4", features = ["derive"] }
+proptest = "1"
+
+[profile.release]
+lto = "thin"
+strip = true

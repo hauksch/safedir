@@ -1,0 +1,7 @@
+/target
+Cargo.lock.bak
+*.p12
+*.pfx
+*.jks
+*.key
+# Public test certificates are fine to vendor; private keys never are.
