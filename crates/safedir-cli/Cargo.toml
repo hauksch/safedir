@@ -1,0 +1,23 @@
+[package]
+name = "safedir-cli"
+description = "CLI for safedir: resolve German justice ERV recipients by SAFE-ID"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "safedir"
+path = "src/main.rs"
+
+[dependencies]
+safedir.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+
+[features]
+default = ["vas"]
+vas = ["safedir/vas"]
+
+[dev-dependencies]
+serde_json.workspace = true

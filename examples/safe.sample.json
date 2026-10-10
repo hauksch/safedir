@@ -1,0 +1,50 @@
+{
+  "$format": 1,
+  "provenance": "sample extract with a self-signed throwaway test certificate (public material only)",
+  "entries": [
+    {
+      "safe_id": "DE.Justiz.dbf3d18a-5c6e-4a0b-9f1e-2a7c8e4d1b30.10dd",
+      "directory": "justiz",
+      "name": "Amtsgericht Bonn",
+      "ort": "Bonn",
+      "plz": "53111",
+      "bundesland": "Nordrhein-Westfalen",
+      "land": "DE",
+      "dienststellen_ids": [
+        "301125T"
+      ],
+      "roles": [
+        "egvp_justiz"
+      ],
+      "osci": {
+        "intermediary_url": "https://intermediaer.justiz.example/entry",
+        "intermediary_cipher_cert": "-----BEGIN CERTIFICATE-----\nMIIDYzCCAkugAwIBAgIUTnJAO9HFDyzIA5o/QRFja/vjmrIwDQYJKoZIhvcNAQEL\nBQAwQTEaMBgGA1UEAwwRVGVzdCBJbnRlcm1lZGlhcnkxFjAUBgNVBAoMDXNhZmVk\naXIgdGVzdHMxCzAJBgNVBAYTAkRFMB4XDTI2MTAxMDE1MDUzM1oXDTM2MTAwNzE1\nMDUzM1owQTEaMBgGA1UEAwwRVGVzdCBJbnRlcm1lZGlhcnkxFjAUBgNVBAoMDXNh\nZmVkaXIgdGVzdHMxCzAJBgNVBAYTAkRFMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A\nMIIBCgKCAQEAvA+sNTmMQzSADkkzL+cjNfq+Y/XJtOB/2k38IT8L6ZIUye45eHSt\nkETvT5UwkFxthcl1uoAMtf7exFYBlixS+6BzqP3MlfLlMbTs9YGgc/d2vHHTM7cU\nkz5+mEEIF5/n7ENrH/qIiVlcljHglexufyHEO8LPiFEdVxyqApj3e2uVhzr9C9AB\n7b7Bu6u0NRYO4aikWQiusXTF8kcRadm8MfdWWxWKmirlt8Lvy6Qcbs7OnGNrWCBs\nIvlo9xaXUeqKKQoASQ5jeVNpkRxIIqaHDBun2Vg4RPh1ZY9qqxG9PngNXPA+W9TN\ni0LNsi/bXQi12rd5op330rNH5Cg2EP4hkwIDAQABo1MwUTAdBgNVHQ4EFgQU5o1O\ndfXglnLm1gvLQKsZui0By0EwHwYDVR0jBBgwFoAU5o1OdfXglnLm1gvLQKsZui0B\ny0EwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAseri+QeKD1N8\nWr4Qm4YFMxoHisTbgfYaqY78d5UBJaRnwkiALOxWbO+N/ukPG2sVIY4QM1h0ZlyV\nhrcEN2w0tYsgahuSLj6onERi2P8GbBFoU8xjRFtVOECi09plAbRYf1ErIBN5hjQH\nUuvc6k/0bnJ/UwcGzjIU1ZIJd7l93Gz1QuU46ro5xXByCJSuxge2Z1QTu9vQ6qdT\njavwPpFhJmXwD0NQEoaUE1SAo4bh51L6lpd2RNCBYW4Dy9YxF731zzejozs+SzHr\nr5RnCA4gBzCUrRZ4/Piy1Ve5iQxYO7AyGlpdYktTtuM5n4nxPY7duGY+5JCmDOX/\nQn7qxQYMyw==\n-----END CERTIFICATE-----\n",
+        "recipient_cipher_certs": [
+          "-----BEGIN CERTIFICATE-----\nMIIDYzCCAkugAwIBAgIUTnJAO9HFDyzIA5o/QRFja/vjmrIwDQYJKoZIhvcNAQEL\nBQAwQTEaMBgGA1UEAwwRVGVzdCBJbnRlcm1lZGlhcnkxFjAUBgNVBAoMDXNhZmVk\naXIgdGVzdHMxCzAJBgNVBAYTAkRFMB4XDTI2MTAxMDE1MDUzM1oXDTM2MTAwNzE1\nMDUzM1owQTEaMBgGA1UEAwwRVGVzdCBJbnRlcm1lZGlhcnkxFjAUBgNVBAoMDXNh\nZmVkaXIgdGVzdHMxCzAJBgNVBAYTAkRFMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A\nMIIBCgKCAQEAvA+sNTmMQzSADkkzL+cjNfq+Y/XJtOB/2k38IT8L6ZIUye45eHSt\nkETvT5UwkFxthcl1uoAMtf7exFYBlixS+6BzqP3MlfLlMbTs9YGgc/d2vHHTM7cU\nkz5+mEEIF5/n7ENrH/qIiVlcljHglexufyHEO8LPiFEdVxyqApj3e2uVhzr9C9AB\n7b7Bu6u0NRYO4aikWQiusXTF8kcRadm8MfdWWxWKmirlt8Lvy6Qcbs7OnGNrWCBs\nIvlo9xaXUeqKKQoASQ5jeVNpkRxIIqaHDBun2Vg4RPh1ZY9qqxG9PngNXPA+W9TN\ni0LNsi/bXQi12rd5op330rNH5Cg2EP4hkwIDAQABo1MwUTAdBgNVHQ4EFgQU5o1O\ndfXglnLm1gvLQKsZui0By0EwHwYDVR0jBBgwFoAU5o1OdfXglnLm1gvLQKsZui0B\ny0EwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAseri+QeKD1N8\nWr4Qm4YFMxoHisTbgfYaqY78d5UBJaRnwkiALOxWbO+N/ukPG2sVIY4QM1h0ZlyV\nhrcEN2w0tYsgahuSLj6onERi2P8GbBFoU8xjRFtVOECi09plAbRYf1ErIBN5hjQH\nUuvc6k/0bnJ/UwcGzjIU1ZIJd7l93Gz1QuU46ro5xXByCJSuxge2Z1QTu9vQ6qdT\njavwPpFhJmXwD0NQEoaUE1SAo4bh51L6lpd2RNCBYW4Dy9YxF731zzejozs+SzHr\nr5RnCA4gBzCUrRZ4/Piy1Ve5iQxYO7AyGlpdYktTtuM5n4nxPY7duGY+5JCmDOX/\nQn7qxQYMyw==\n-----END CERTIFICATE-----\n"
+        ],
+        "reader_cipher_certs": [
+          "-----BEGIN CERTIFICATE-----\nMIIDYzCCAkugAwIBAgIUTnJAO9HFDyzIA5o/QRFja/vjmrIwDQYJKoZIhvcNAQEL\nBQAwQTEaMBgGA1UEAwwRVGVzdCBJbnRlcm1lZGlhcnkxFjAUBgNVBAoMDXNhZmVk\naXIgdGVzdHMxCzAJBgNVBAYTAkRFMB4XDTI2MTAxMDE1MDUzM1oXDTM2MTAwNzE1\nMDUzM1owQTEaMBgGA1UEAwwRVGVzdCBJbnRlcm1lZGlhcnkxFjAUBgNVBAoMDXNh\nZmVkaXIgdGVzdHMxCzAJBgNVBAYTAkRFMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A\nMIIBCgKCAQEAvA+sNTmMQzSADkkzL+cjNfq+Y/XJtOB/2k38IT8L6ZIUye45eHSt\nkETvT5UwkFxthcl1uoAMtf7exFYBlixS+6BzqP3MlfLlMbTs9YGgc/d2vHHTM7cU\nkz5+mEEIF5/n7ENrH/qIiVlcljHglexufyHEO8LPiFEdVxyqApj3e2uVhzr9C9AB\n7b7Bu6u0NRYO4aikWQiusXTF8kcRadm8MfdWWxWKmirlt8Lvy6Qcbs7OnGNrWCBs\nIvlo9xaXUeqKKQoASQ5jeVNpkRxIIqaHDBun2Vg4RPh1ZY9qqxG9PngNXPA+W9TN\ni0LNsi/bXQi12rd5op330rNH5Cg2EP4hkwIDAQABo1MwUTAdBgNVHQ4EFgQU5o1O\ndfXglnLm1gvLQKsZui0By0EwHwYDVR0jBBgwFoAU5o1OdfXglnLm1gvLQKsZui0B\ny0EwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAseri+QeKD1N8\nWr4Qm4YFMxoHisTbgfYaqY78d5UBJaRnwkiALOxWbO+N/ukPG2sVIY4QM1h0ZlyV\nhrcEN2w0tYsgahuSLj6onERi2P8GbBFoU8xjRFtVOECi09plAbRYf1ErIBN5hjQH\nUuvc6k/0bnJ/UwcGzjIU1ZIJd7l93Gz1QuU46ro5xXByCJSuxge2Z1QTu9vQ6qdT\njavwPpFhJmXwD0NQEoaUE1SAo4bh51L6lpd2RNCBYW4Dy9YxF731zzejozs+SzHr\nr5RnCA4gBzCUrRZ4/Piy1Ve5iQxYO7AyGlpdYktTtuM5n4nxPY7duGY+5JCmDOX/\nQn7qxQYMyw==\n-----END CERTIFICATE-----\n"
+        ]
+      }
+    },
+    {
+      "safe_id": "DE.BRAK.bdda0cd6-ccdd-44a1-a42c-f13ced17235b.334d",
+      "directory": "brak",
+      "vorname": "Max",
+      "name": "Mustermann",
+      "beruf": "Rechtsanwalt",
+      "kanzlei": "Kanzlei am Hof",
+      "ort": "Bonn",
+      "roles": [
+        "egvp_beA"
+      ],
+      "osci": {
+        "intermediary_url": "https://bea-intermediaer.example/entry",
+        "intermediary_cipher_cert": "-----BEGIN CERTIFICATE-----\nMIIDYzCCAkugAwIBAgIUTnJAO9HFDyzIA5o/QRFja/vjmrIwDQYJKoZIhvcNAQEL\nBQAwQTEaMBgGA1UEAwwRVGVzdCBJbnRlcm1lZGlhcnkxFjAUBgNVBAoMDXNhZmVk\naXIgdGVzdHMxCzAJBgNVBAYTAkRFMB4XDTI2MTAxMDE1MDUzM1oXDTM2MTAwNzE1\nMDUzM1owQTEaMBgGA1UEAwwRVGVzdCBJbnRlcm1lZGlhcnkxFjAUBgNVBAoMDXNh\nZmVkaXIgdGVzdHMxCzAJBgNVBAYTAkRFMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A\nMIIBCgKCAQEAvA+sNTmMQzSADkkzL+cjNfq+Y/XJtOB/2k38IT8L6ZIUye45eHSt\nkETvT5UwkFxthcl1uoAMtf7exFYBlixS+6BzqP3MlfLlMbTs9YGgc/d2vHHTM7cU\nkz5+mEEIF5/n7ENrH/qIiVlcljHglexufyHEO8LPiFEdVxyqApj3e2uVhzr9C9AB\n7b7Bu6u0NRYO4aikWQiusXTF8kcRadm8MfdWWxWKmirlt8Lvy6Qcbs7OnGNrWCBs\nIvlo9xaXUeqKKQoASQ5jeVNpkRxIIqaHDBun2Vg4RPh1ZY9qqxG9PngNXPA+W9TN\ni0LNsi/bXQi12rd5op330rNH5Cg2EP4hkwIDAQABo1MwUTAdBgNVHQ4EFgQU5o1O\ndfXglnLm1gvLQKsZui0By0EwHwYDVR0jBBgwFoAU5o1OdfXglnLm1gvLQKsZui0B\ny0EwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAseri+QeKD1N8\nWr4Qm4YFMxoHisTbgfYaqY78d5UBJaRnwkiALOxWbO+N/ukPG2sVIY4QM1h0ZlyV\nhrcEN2w0tYsgahuSLj6onERi2P8GbBFoU8xjRFtVOECi09plAbRYf1ErIBN5hjQH\nUuvc6k/0bnJ/UwcGzjIU1ZIJd7l93Gz1QuU46ro5xXByCJSuxge2Z1QTu9vQ6qdT\njavwPpFhJmXwD0NQEoaUE1SAo4bh51L6lpd2RNCBYW4Dy9YxF731zzejozs+SzHr\nr5RnCA4gBzCUrRZ4/Piy1Ve5iQxYO7AyGlpdYktTtuM5n4nxPY7duGY+5JCmDOX/\nQn7qxQYMyw==\n-----END CERTIFICATE-----\n",
+        "recipient_cipher_certs": [
+          "-----BEGIN CERTIFICATE-----\nMIIDYzCCAkugAwIBAgIUTnJAO9HFDyzIA5o/QRFja/vjmrIwDQYJKoZIhvcNAQEL\nBQAwQTEaMBgGA1UEAwwRVGVzdCBJbnRlcm1lZGlhcnkxFjAUBgNVBAoMDXNhZmVk\naXIgdGVzdHMxCzAJBgNVBAYTAkRFMB4XDTI2MTAxMDE1MDUzM1oXDTM2MTAwNzE1\nMDUzM1owQTEaMBgGA1UEAwwRVGVzdCBJbnRlcm1lZGlhcnkxFjAUBgNVBAoMDXNh\nZmVkaXIgdGVzdHMxCzAJBgNVBAYTAkRFMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A\nMIIBCgKCAQEAvA+sNTmMQzSADkkzL+cjNfq+Y/XJtOB/2k38IT8L6ZIUye45eHSt\nkETvT5UwkFxthcl1uoAMtf7exFYBlixS+6BzqP3MlfLlMbTs9YGgc/d2vHHTM7cU\nkz5+mEEIF5/n7ENrH/qIiVlcljHglexufyHEO8LPiFEdVxyqApj3e2uVhzr9C9AB\n7b7Bu6u0NRYO4aikWQiusXTF8kcRadm8MfdWWxWKmirlt8Lvy6Qcbs7OnGNrWCBs\nIvlo9xaXUeqKKQoASQ5jeVNpkRxIIqaHDBun2Vg4RPh1ZY9qqxG9PngNXPA+W9TN\ni0LNsi/bXQi12rd5op330rNH5Cg2EP4hkwIDAQABo1MwUTAdBgNVHQ4EFgQU5o1O\ndfXglnLm1gvLQKsZui0By0EwHwYDVR0jBBgwFoAU5o1OdfXglnLm1gvLQKsZui0B\ny0EwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAseri+QeKD1N8\nWr4Qm4YFMxoHisTbgfYaqY78d5UBJaRnwkiALOxWbO+N/ukPG2sVIY4QM1h0ZlyV\nhrcEN2w0tYsgahuSLj6onERi2P8GbBFoU8xjRFtVOECi09plAbRYf1ErIBN5hjQH\nUuvc6k/0bnJ/UwcGzjIU1ZIJd7l93Gz1QuU46ro5xXByCJSuxge2Z1QTu9vQ6qdT\njavwPpFhJmXwD0NQEoaUE1SAo4bh51L6lpd2RNCBYW4Dy9YxF731zzejozs+SzHr\nr5RnCA4gBzCUrRZ4/Piy1Ve5iQxYO7AyGlpdYktTtuM5n4nxPY7duGY+5JCmDOX/\nQn7qxQYMyw==\n-----END CERTIFICATE-----\n"
+        ]
+      }
+    }
+  ]
+}
