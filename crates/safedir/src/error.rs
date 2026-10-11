@@ -221,29 +221,73 @@ impl ErrCode {
         }
     }
 
-    /// Extract the first `ERRnn` token from free-form directory text.
+    /// Extract the first *catalogue* `ERRnn` code from free-form directory
+    /// text. All occurrences of the substring `ERR` are examined (so text
+    /// like `"ERROR: … ERR70"` still finds `ERR70`), and the digit run must
+    /// match a catalogue entry exactly — `ERR1007` does *not* match
+    /// `ERR100` (documented rule: exact catalogue tokens only).
     #[must_use]
     pub fn from_message_text(text: &str) -> Option<(Self, String)> {
-        let start = text.find("ERR")?;
-        let digits: String = text[start + 3..]
-            .chars()
-            .take_while(char::is_ascii_digit)
-            .collect();
-        let code = match digits.as_str() {
-            "10" => Self::Err10,
-            "11" => Self::Err11,
-            "12" => Self::Err12,
-            "13" => Self::Err13,
-            "14" => Self::Err14,
-            "20" => Self::Err20,
-            "30" => Self::Err30,
-            "40" => Self::Err40,
-            "50" => Self::Err50,
-            "60" => Self::Err60,
-            "70" => Self::Err70,
-            "100" => Self::Err100,
-            _ => return None,
-        };
-        Some((code, text.to_owned()))
+        for (start, _) in text.match_indices("ERR") {
+            let digits: String = text[start + 3..]
+                .chars()
+                .take_while(char::is_ascii_digit)
+                .collect();
+            let code = match digits.as_str() {
+                "10" => Self::Err10,
+                "11" => Self::Err11,
+                "12" => Self::Err12,
+                "13" => Self::Err13,
+                "14" => Self::Err14,
+                "20" => Self::Err20,
+                "30" => Self::Err30,
+                "40" => Self::Err40,
+                "50" => Self::Err50,
+                "60" => Self::Err60,
+                "70" => Self::Err70,
+                "100" => Self::Err100,
+                _ => continue,
+            };
+            return Some((code, text.to_owned()));
+        }
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ErrCode;
+
+    #[test]
+    fn finds_code_behind_err_word() {
+        // "ERROR:" must not swallow a later real code.
+        let (code, _) = ErrCode::from_message_text("ERROR: see ERR70").unwrap();
+        assert_eq!(code, ErrCode::Err70);
+    }
+
+    #[test]
+    fn first_catalogue_code_wins() {
+        let (code, _) = ErrCode::from_message_text("ERR30 vor ERR40").unwrap();
+        assert_eq!(code, ErrCode::Err30);
+    }
+
+    #[test]
+    fn non_catalogue_digit_runs_are_skipped() {
+        // ERR1007 is not a catalogue token; scanning continues.
+        let (code, _) = ErrCode::from_message_text("ERR1007 dann ERR40").unwrap();
+        assert_eq!(code, ErrCode::Err40);
+    }
+
+    #[test]
+    fn bare_err_and_errless_text_find_nothing() {
+        assert!(ErrCode::from_message_text("ERR am Ende").is_none());
+        assert!(ErrCode::from_message_text("kein Code").is_none());
+        assert!(ErrCode::from_message_text("").is_none());
+    }
+
+    #[test]
+    fn err100_is_found() {
+        let (code, _) = ErrCode::from_message_text("x ERR100 y").unwrap();
+        assert_eq!(code, ErrCode::Err100);
     }
 }

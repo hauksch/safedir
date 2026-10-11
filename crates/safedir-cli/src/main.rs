@@ -140,14 +140,14 @@ fn cmd_check(id: &str) -> Result<ExitCode, Error> {
     let parsed: SafeId = id.parse()?;
     match parsed.kind() {
         safedir::safe_id::IdKind::Modern { domain, .. } => {
-            println!(
+            out(&format!(
                 "OK  {}  (modern, domain {}, directory {}, checksum valid)",
                 parsed,
                 domain,
                 parsed
                     .directory()
                     .map_or("unknown".to_owned(), |d| d.token().to_owned())
-            );
+            ));
         }
         safedir::safe_id::IdKind::Legacy { prefix } => {
             out(&format!(
@@ -190,13 +190,12 @@ fn cmd_lookup(
         eprintln!("safedir: no entry for {ref}");
         return Ok(ExitCode::from(3));
     }
-    for entry in &entries {
-        if json {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(entry).map_err(|e| Error::Extract(e.to_string()))?
-            );
-        } else {
+    if json {
+        let json_out =
+            serde_json::to_string_pretty(&entries).map_err(|e| Error::Extract(e.to_string()))?;
+        out(&json_out);
+    } else {
+        for entry in &entries {
             print_entry(entry);
         }
     }
@@ -274,11 +273,11 @@ fn print_entry(e: &SafeEntry) {
     if let Some(fp) = &e.osci.intermediary_cipher.fingerprint {
         out(&format!("int.-cert    sha256:{fp}"));
     }
-    println!(
+    out(&format!(
         "certs        recipient={} reader={}",
         e.osci.recipient_cipher.len(),
         e.osci.reader_cipher.len()
-    );
+    ));
     out(&format!("state        {:?}", e.state(now_unix())));
 }
 
@@ -316,8 +315,8 @@ fn cmd_validate(file: &std::path::Path, json: bool) -> Result<ExitCode, Error> {
         }
         for i in &issues {
             match i.entry {
-                Some(n) => println!("entry {n}: {}: {}", i.field, i.message),
-                None => println!("{}: {}", i.field, i.message),
+                Some(n) => out(&format!("entry {n}: {}: {}", i.field, i.message)),
+                None => out(&format!("{}: {}", i.field, i.message)),
             }
         }
     }
@@ -363,11 +362,11 @@ fn cmd_addressable(
             }
             safedir::addressability::Addressability::NotAddressable(reason) => {
                 all_ok = false;
-                println!(
+                out(&format!(
                     "NOT ADDRESSABLE {} → {}: {reason}",
                     sender.token(),
                     e.safe_id
-                );
+                ));
             }
             _ => {
                 all_ok = false;

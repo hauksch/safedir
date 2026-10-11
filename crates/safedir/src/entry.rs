@@ -258,6 +258,10 @@ pub struct SafeEntry {
     pub roles: Vec<RoleValue>,
     /// OSCI routing data.
     pub osci: OsciEndpoint,
+    /// Parse-time diagnostics (dropped role tokens, undecodable
+    /// certificates, …) — surfaced so degradation is never silent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 impl SafeEntry {
@@ -354,6 +358,7 @@ mod tests {
                 recipient_cipher: vec![CertRef::__test_with_validity(TEST_CERT_PEM, nb, na)],
                 reader_cipher: vec![],
             },
+            warnings: Vec::new(),
         }
     }
 

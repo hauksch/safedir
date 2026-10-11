@@ -1,52 +1,33 @@
-# safedir v1 — Implementation Plan
+# safedir remediation plan (post-audit)
 
-## Mission
-A Rust workspace that resolves German justice ERV recipients by SAFE-ID (and Dienststellen-ID) into everything an OSCI sender needs: intermediary URL, intermediary/recipient/reader encryption certificates, display data, role values, and an advisory addressability verdict. Consumer: rosci (`--to safe:` scheme via its `DvdvDirectory`-style seam). Transport, VHN, XJustiz are explicitly **out of scope** for v1.
+Record the full audit first: write the consolidated findings to `docs/AUDIT-2026-10-11.md` (severity, file:line, fix status tracked there), then fix in three phases, each ending with the full gate (fmt, clippy -D warnings, tests default + all-features) and a git commit.
 
-## Confirmed scope decisions
-1. **Library + thin CLI** (workspace `crates/safedir` + `crates/safedir-cli`, mirroring rosci conventions).
-2. **Live SPML/VAS client in v1**, behind a `vas` feature flag, mock-tested only (endpoint/auth configurable; real access requires BLK-AG registration — documented, not implemented).
-3. **Lean addressability module** — research verdict: the VAS publicly enforces only parameter legality (A4); result shaping is via *client-supplied* role filters (A6–A8, a duty on send/receive software); the visibility matrix lives in the *client requirements* paper; OSCI intermediaries enforce no role rules; and our extract/in-memory backends have no server at all. So safedir ships the matrix as an **advisory client-side guard**, documented as such.
-4. **VHN 2 / XJustiz / erv-message: out of scope** (later crate/phase when EGVP-profile messaging is tackled).
+## Phase 1 — correctness of the VAS XML pipeline + quick fixes (no spec decisions needed)
+1. `vas/spml.rs` fragment reconstruction: push `Event::Text` bytes **verbatim** (already escaped); keep `xml_escape` only for synthesized markup/attributes. `vas/idsispp.rs`: call `t.unescape()` when accumulating leaf text (fall back to lossy UTF-8).
+2. Depth-scope the response state machine: honor `data` only as a direct child of `pso`, `psoID`/`pso` only at their depth; ignore same-local-name elements inside the payload.
+3. Stop silently dropping data: `parse_profile` failures, unparseable role values, and undecodable certs accumulate into a `Vec<String>` of warnings surfaced on `SearchOutcome` (new `warnings` field) and, for `lookup_safe_id`, into the `DirectoryFailure`/entry-warnings path; `lookup_safe_id` takes the **first** pso and errors if more than one.
+4. Fix the telefon XPath to `urn:liberty:id-sis-pp:msgTechnology:pots` (Anlage c) + mock-test assertion.
+5. `ErrCode::from_message_text`: scan **all** `ERR` occurrences (`match_indices`), longest-prefix catalogue match (`ERR1007` → `ERR100`? no — catalogue-exact with documented longest-prefix rule), plus unit tests for `ERROR:`-prefixed text, multiple codes, bare `ERR`.
+6. `InMemoryResolver::search`: return `Err(Error::Directory(Err40, …))` when hits > 100 (A16/A17), aligning with the VAS backend; regression test at exactly 100/101 hits.
+7. CLI: route every remaining output through the pipe-safe `out()` helper (cmd_check modern branch, `--json` lookup, print_entry tail, validate/addressable lines); `--json` lookup prints one JSON array.
+8. Tests: entity-encoded fixtures (`M&#252;ller`, `&amp;`) through mock VAS end-to-end; stray `<data>`-inside-payload adversarial response.
 
-## Library: `crates/safedir`
-- **`safe_id`** — `SafeId` type: modern format `DE.<Domain>.<UUID>.<4-hex-checkdigits>` (domains: `BRAK`, `BEN_PROD`, `BNotK_Produktiv`, `Justiz`, `Other(String)`) plus legacy patterns (`safe-sp1-<ms>-<n>`, `govello-…`, `safe-prod-…`). Checksum per Abbildungsvorschrift V2: first two bytes of SHA-256 over the lowercased normalized ID, hex. `FromStr`/`Display`/serde/`Eq`/`Hash`; constructive error detailing which component failed.
-- **`dienststellen`** — `DienststellenId` newtype; wire prefix `Dienststellen-ID:` for lookup requests (per search standard §6).
-- **`entry`** — `SafeEntry` typed after the v1.5 attribute table (Vorname, Name/Organisation, Berufsbezeichnung, Kanzlei, Abteilung, address fields, phone, SAFE-ID, Dienststellen-IDs, role values, directory origin Justiz/BRAK/BNotK/BStBK). Certificates modeled as a **set** (`CertRef`: raw DER/PEM bytes, fingerprint, parsed validity window when the `x509` feature is on, opaque otherwise) — never a single field (10-cert overlap reality, §5.5 of the report).
-- **`roles`** — `RoleValue` enum: `egvp_justiz, egvp_bea, egvp_ben, egvp_best, egvp_bebpo, egvp_ebo, ozg_postfach, egvp_buerger, egvp_behoerde, buerger_hin, buerger_rueck, zuzu, egvp_test, zertifikatswechsel`, `Other(String)`.
-- **`addressability`** — const visibility matrix from the requirements paper §5.3; `Addressability::{Addressable, NotAddressable(reason), Conditional(EboPlus, GerichtsvollzieherException…)}`; entry state machine: Active / Inactive(ERR20) / CertificateChange (sole `zertifikatswechsel`) / CertsExpired(at `now`, A9 semantics). Pure functions, table-driven, `#[doc]`-marked advisory.
-- **`resolver`** — trait `SafeDirectory`: `lookup_safe_id`, `lookup_dienststellen`, `search(SearchQuery)`; `SearchQuery` models allowed parameters + search kinds (begins-with/contains/equals with min-length rules) so illegal queries are unrepresentable where practical.
-- **`error`** — thiserror taxonomy: `Config`, `Parse`, `Extract`, `Directory(ErrCode)`, `Network`, `Addressability`; `ErrCode` typed ERR10–ERR100 with the standard's German messages.
-- **Backends**:
-  - `InMemoryResolver` (tests, embedded use).
-  - `ExtractResolver` (default): reads a versioned **`safe.json`** extract — array of entries with inline PEM certs, `"$format": 1`; same offline-first philosophy as rosci's `dvdv.json`; format documented in docs + validated by CLI.
-  - `SpmlResolver` (feature `vas`, async): two request types per SPML 2.0 — (a) **`lookupRequest`** by `psoID` (SAFE-ID, or `Dienststellen-ID:` prefix per the standard's printed example — fully specified), with the exact namespace set (`urn:oasis:names:tc:SPML:2:0*`, `urn:liberty:id-sis-pp:200505`, `urn:de:egov:names:safe:1.0:*`, FIM/beA extensions) and `returnData="everything"`; (b) **`searchRequest`** with an SPML Query/DSML expression tree (`and` combinators, substring `initial/any` vs `equalityMatch` per the "Art der Suche" column) plus role filters — constructed per the public OASIS SPML 2.0 spec since the SAFE standard prints only lookup XML; mock-driven so dialect adjustments after credential access are cheap. Parses `…Response` PSO data into `SafeEntry`, surfaces the 100-hit cap and typed ERR10–ERR100 codes. reqwest+rustls, client-cert TLS configurable, tested only against a local mock VAS; docs point to the Projektbüro (`it-standards@justiz.de`) for real access.
+## Phase 2 — spec alignment (verification, then code)
+1. **Matrix verification first**: layout-aware `pdftotext -layout` of §5.3 (p. 19) of the Anforderungspapier; decode the ±-grid with column offsets; cross-check every cell against §5.3 prose; document the decoded matrix in the research report. Then fix `allowed_receivers`: prose-settled now (add `BuergerRueck` to the eBO/MJP arm; remove `EgvpBehoerde` from it; add `BuergerHin/Rueck` to the besondere arm and expand/confirm GV rows *only if* the table confirms); add the missing test cells (incl. `Other`/`Zuzu` senders, receiver with only `Other`).
+2. `SearchQuery` parameter set per the v1.5 table: add `beruf` (contains ≥ 5); remove `abteilung`/`land`/`telefon`/`mobil` from the *builder* (keep fields reading them from extracts/entries), correct the doc-comment minimums; enforce A4 in `SearchQuery::matches` itself (empty query matches nothing) so `Default`-constructed queries can't dump the directory; add `SearchQuery::validate()` re-check for hand-built queries.
+3. `EntryState`: include the intermediary certificate in expiry evaluation; not-yet-valid → own state mapped to `NotAddressable(reason)`; zero recipient+reader certs → `CertsExpired`-like `NoCerts` state; require a valid *recipient* cert for `Active` (reader-only no longer suffices). Tests for each branch (the `any_future` branch is currently never executed).
+4. `safe_id`: classify the domain segment case-insensitively (canonical-spelling match), dispatch on case-insensitive `DE.` prefix (kills the dead `Country` arm's confusion), require exactly 3 legacy parts (or validated alnum middles), validate `Domain::Other` in `compose` (non-empty, `is_domain_char`, not shadowing a known spelling), length cap (~120 chars) before allocating. Decide + document raw-vs-canonical `Eq` semantics; make `lookup_safe_id` compare case-insensitively so blessed case variants resolve.
 
-## CLI: `crates/safedir-cli`
-- `safedir check <SAFE-ID>` — parse + checksum, fully offline.
-- `safedir lookup <SAFE-ID | dienststellen:301125T>` — `--file safe.json` (default) or `--vas-url/--vas-cert` (feature-gated); prints entry or `--json`.
-- `safedir validate <extract.json>` — extract linting (schema, cert parse, charset, duplicate SAFE-IDs).
-- `safedir addressable <sender-role> <id-or-file-entry>` — advisory verdict with reason.
-- Exit codes 0/2/3/4/5 in rosci's spirit (ok / usage-config / not-found / directory-ERR / internal); env `SAFEDIR_*` only, no config files, no state.
+## Phase 3 — robustness & hygiene
+1. `vas/client.rs`: on non-2xx still parse the body (SOAP Fault extraction: `faultcode`/`faultstring`/`detail` texts into `error_text` in spml.rs); enforce `https` scheme with an explicit loopback escape hatch for tests; `redirect(Policy::none())`.
+2. Extract hardening: `#[serde(deny_unknown_fields)]` on all three structs; `ExtractResolver::from_path` runs `validate()` and refuses duplicates/empty-role entries (with an opt-out flag); `from_entries` takes provenance; real URL parsing (scheme + host); `into_entries` errors carry the cert-field label; empty-PEM-body rejection in `decode_pem_body`.
+3. `CertRef::__test_with_validity` → `#[cfg(test)] pub(crate)`; serde `Deserialize` recomputes the fingerprint when absent; document that stored validity is trusted.
+4. `roles.rs`: drop the unbacked `__` rejection; keep charset rule; document mixed-case emission (or switch to §5.3 lowercase tokens) — verify against VAS data when access exists; preserve unparseable role tokens as `Other` instead of dropping in idsispp.
+5. Error taxonomy: `#[source]` chains for Network/Extract (typed sources), map Network → 4 documented, add a genuine internal-invariant → 5 or drop code 5 from docs/README.
+6. CI: add `cargo check -p safedir --no-default-features`, `-p safedir-cli --no-default-features` (un-deads the vas fallback), and an MSRV 1.85 job; mock server: read timeout, non-empty capture assertions with context, no bare `[0]` unwrap.
+7. Docs: README gains the `--vas-*` flags and the exit-code truth; audit file updated with resolution status per finding.
 
-## Tests & CI
-- Golden vectors: all SAFE-IDs from the Abbildungsvorschrift (modern + legacy), tampered-checksum rejections, Dienststellen-ID example `301125T`.
-- Table-driven visibility tests transcribed from requirements §5.3 prose (incl. eBO-plus exception cases, MJP↔eBO exclusion).
-- Extract format round-trip + parser fuzzing.
-- Mock VAS (wiremock) replaying the standard's literal lookup XML example plus crafted search responses and every ERR code; request-XML namespace assertions.
-- Proptest checksum round-trips; default test runs touch no network (rosci ground rule).
-- CI (GitHub Actions): fmt, clippy -D warnings, test, cargo-deny; edition 2024, MSRV = current stable, documented; MIT license (match rosci).
+## Explicit non-fixes (accepted)
+- Advisory nature of the matrix (documented, not a security boundary); `Cow` allocations in `Other(_)` tokens; extract file-size caps (serde's depth limit suffices for now — revisit if extracts become untrusted input); `x509`/`vas` default-on feature strategy (documented in README instead).
 
-## Milestones
-- **M1**: workspace scaffold, CI, `safe_id` + `dienststellen` + errors, CLI `check`. Publishable 0.1.0.
-- **M2**: `entry`, `roles`, extract + memory backends, `addressability`, CLI `lookup`/`validate`/`addressable`.
-- **M3**: `vas` feature — `lookupRequest` + `searchRequest` builder, mock VAS suite, credentials/acquisition docs.
-- **M4** (separate PR to hauksch/rosci): `SafeDirectory` impl over extract, `--to safe:<SAFE-ID>` and `--to safe:dienststellen:<ID>` schemes, mapping `SafeEntry` → rosci's `--intermediary/--intermediary-cert/--to cert:/--decrypter-cert` contract.
-
-## Post-v1 (explicitly deferred)
-VHN 2 parse/verify, XJustiz types (xsd-parser), EGVP container assembly (`erv-message`), XRepository Werteliste snapshot tooling, REST daemon, crates.io publication of the name (verify availability of `safedir` first — could not be checked from the sandbox).
-
-## Known risks
-- SPML `searchRequest` dialect has freedoms beyond the printed lookup example → builder stays mock-driven and cheap to adjust; `lookup` (the SAFE-ID core path) is fully specified by example.
-- Real VAS may enforce requester-role filtering server-side (unpublished) → our matrix stays advisory; document the possibility.
-- `zertifikatswechsel` is admin practice, not in the search standard → modeled as entry state derived from roles, flagged in docs.
+Each phase lands as one commit with the audit file updated; no behavior change ships without a test that would have caught it.

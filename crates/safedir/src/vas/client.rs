@@ -118,9 +118,10 @@ impl SpmlResolver {
 
     fn into_outcome(response: SpmlResponse) -> Result<SearchOutcome, Error> {
         match response {
-            SpmlResponse::Success(entries) => Ok(SearchOutcome {
+            SpmlResponse::Success(entries, warnings) => Ok(SearchOutcome {
                 entries,
                 notes: Vec::new(),
+                warnings,
             }),
             SpmlResponse::Failure(Some(code), msg) => Err(Error::Directory(code, msg)),
             SpmlResponse::Failure(None, msg) => Err(Error::DirectoryFailure(msg)),
@@ -132,7 +133,26 @@ impl SafeDirectory for SpmlResolver {
     fn lookup_safe_id(&self, id: &SafeId) -> Result<Option<SafeEntry>, Error> {
         let response = self.post(&spml::lookup_request(id.as_str()))?;
         match response {
-            SpmlResponse::Success(mut entries) => Ok(entries.pop()),
+            SpmlResponse::Success(mut entries, warnings) => {
+                if entries.len() > 1 {
+                    return Err(Error::DirectoryFailure(format!(
+                        "lookup for {} returned {} result objects (expected at most one){}",
+                        id.as_str(),
+                        entries.len(),
+                        if warnings.is_empty() {
+                            String::new()
+                        } else {
+                            format!("; warnings: {}", warnings.join("; "))
+                        }
+                    )));
+                }
+                if entries.is_empty() && !warnings.is_empty() {
+                    // A success response whose only result object was
+                    // unusable is a defect, not "not found".
+                    return Err(Error::DirectoryFailure(warnings.join("; ")));
+                }
+                Ok(entries.pop())
+            }
             SpmlResponse::Failure(Some(code), msg) => Err(Error::Directory(code, msg)),
             SpmlResponse::Failure(None, msg) => Err(Error::DirectoryFailure(msg)),
         }
@@ -141,7 +161,23 @@ impl SafeDirectory for SpmlResolver {
     fn lookup_dienststellen(&self, id: &DienststellenId) -> Result<Vec<SafeEntry>, Error> {
         let response = self.post(&spml::lookup_request(&id.wire_form()))?;
         match response {
-            SpmlResponse::Success(entries) => Ok(entries),
+            SpmlResponse::Success(entries, warnings) => {
+                // Dienststellen-IDs have cardinality 1..n on an entry, but a
+                // single lookup must still return at most one PSO.
+                if entries.len() > 1 {
+                    return Err(Error::DirectoryFailure(format!(
+                        "lookup for {} returned {} result objects (expected at most one){}",
+                        id.wire_form(),
+                        entries.len(),
+                        if warnings.is_empty() {
+                            String::new()
+                        } else {
+                            format!("; warnings: {}", warnings.join("; "))
+                        }
+                    )));
+                }
+                Ok(entries)
+            }
             SpmlResponse::Failure(Some(code), msg) => Err(Error::Directory(code, msg)),
             SpmlResponse::Failure(None, msg) => Err(Error::DirectoryFailure(msg)),
         }

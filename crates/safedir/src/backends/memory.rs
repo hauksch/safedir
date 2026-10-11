@@ -63,20 +63,26 @@ impl SafeDirectory for InMemoryResolver {
     }
 
     fn search(&self, query: &SearchQuery) -> Result<SearchOutcome, Error> {
-        let mut entries: Vec<SafeEntry> = self
+        let count = self.entries.iter().filter(|e| query.matches(e)).count();
+        if count > MAX_HITS {
+            // A15–A17: more than MAX_HITS hits are NOT returned; the
+            // requester gets the ERR40 error and must narrow the query.
+            return Err(Error::Directory(
+                crate::error::ErrCode::Err40,
+                crate::error::ErrCode::Err40.message().to_owned(),
+            ));
+        }
+        let entries: Vec<SafeEntry> = self
             .entries
             .iter()
             .filter(|e| query.matches(e))
             .cloned()
             .collect();
-        // A15/A16: more than MAX_HITS hits must not be returned silently —
-        // for local backends we truncate and add the ERR40 note.
-        let mut notes = Vec::new();
-        if entries.len() > MAX_HITS {
-            entries.truncate(MAX_HITS);
-            notes.push(crate::error::ErrCode::Err40);
-        }
-        Ok(SearchOutcome { entries, notes })
+        Ok(SearchOutcome {
+            entries,
+            notes: Vec::new(),
+            warnings: Vec::new(),
+        })
     }
 }
 
@@ -91,7 +97,7 @@ mod tests {
         SafeEntry {
             safe_id: SafeId::compose(
                 &crate::safe_id::Domain::Justiz,
-                &format!("dbf3d18a-5c6e-4a0b-9f1e-2a7c8e4d1b{}", name.len()),
+                &format!("dbf3d18a-5c6e-4a0b-9f1e-2a7c8e4d1b{:02x}", name.len()),
             )
             .unwrap(),
             directory: Directory::Justiz,
@@ -120,7 +126,51 @@ mod tests {
                 )],
                 reader_cipher: vec![],
             },
+            warnings: Vec::new(),
         }
+    }
+
+    #[test]
+    fn search_errors_above_the_100_hit_cap() {
+        let entries: Vec<SafeEntry> = (0..101)
+            .map(|i| {
+                let mut e = entry(&format!("Gericht {i}"), "Bonn", &[RoleValue::EgvpJustiz]);
+                e.safe_id = crate::safe_id::SafeId::compose(
+                    &crate::safe_id::Domain::Justiz,
+                    &format!("{:08x}-5c6e-4a0b-9f1e-2a7c8e4d1b{:02x}", i, i),
+                )
+                .unwrap();
+                e
+            })
+            .collect();
+        let dir = InMemoryResolver::from_entries(entries);
+
+        let q = SearchQuery::builder()
+            .ort_contains("Bonn")
+            .unwrap()
+            .build()
+            .unwrap();
+        match dir.search(&q) {
+            Err(Error::Directory(crate::error::ErrCode::Err40, _)) => {}
+            other => panic!("expected ERR40, got {other:?}"),
+        }
+
+        // Exactly 100 hits is fine.
+        let entries: Vec<SafeEntry> = (0..100)
+            .map(|i| {
+                let mut e = entry(&format!("Gericht {i}"), "Bonn", &[RoleValue::EgvpJustiz]);
+                e.safe_id = crate::safe_id::SafeId::compose(
+                    &crate::safe_id::Domain::Justiz,
+                    &format!("{:08x}-5c6e-4a0b-9f1e-2a7c8e4d1c{:02x}", i, i),
+                )
+                .unwrap();
+                e
+            })
+            .collect();
+        let dir = InMemoryResolver::from_entries(entries);
+        let out = dir.search(&q).unwrap();
+        assert_eq!(out.entries.len(), 100);
+        assert!(out.warnings.is_empty());
     }
 
     #[test]
