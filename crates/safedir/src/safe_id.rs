@@ -1,7 +1,7 @@
 //! SAFE-ID parsing and validation.
 //!
 //! Source: *SAFE-ID — Abbildungsvorschrift, Stand Juli 2017* (BLK-AG
-//! IT-Standards; archived at `docs/specs/SAFE_Abbildungsvorschrift_SAFE_ID_V2.pdf`).
+//! IT-Standards; see `docs/SPECIFICATIONS.md` for the download location).
 //!
 //! ## Modern format (since 2016/2017)
 //!

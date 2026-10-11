@@ -133,19 +133,18 @@ impl SearchQuery {
         if checks.contains(&Some(false)) {
             return false;
         }
-        if let Some(id) = &self.safe_id {
-            if !id.as_str().eq_ignore_ascii_case(entry.safe_id.as_str()) {
-                return false;
-            }
+        if let Some(id) = &self.safe_id
+            && !id.as_str().eq_ignore_ascii_case(entry.safe_id.as_str())
+        {
+            return false;
         }
-        if let Some(ds) = &self.dienststellen_id {
-            if !entry
+        if let Some(ds) = &self.dienststellen_id
+            && !entry
                 .dienststellen_ids
                 .iter()
                 .any(|d| d.as_str().eq_ignore_ascii_case(ds.as_str()))
-            {
-                return false;
-            }
+        {
+            return false;
         }
         if !self.roles.is_empty()
             && !entry.roles.iter().any(|r| {
@@ -205,12 +204,12 @@ impl SearchQuery {
             ("ort", &self.ort, 2),
         ];
         for (field, term, min) in mins {
-            if let Some(t) = term {
-                if t.value.trim().chars().count() < min {
-                    return Err(Error::InvalidQuery(format!(
-                        "{field}: needs at least {min} characters (ERR30)"
-                    )));
-                }
+            if let Some(t) = term
+                && t.value.trim().chars().count() < min
+            {
+                return Err(Error::InvalidQuery(format!(
+                    "{field}: needs at least {min} characters (ERR30)"
+                )));
             }
         }
         Ok(())

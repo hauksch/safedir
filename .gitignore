@@ -5,3 +5,9 @@ Cargo.lock.bak
 *.jks
 *.key
 # Public test certificates are fine to vendor; private keys never are.
+
+# Local-only: archived third-party specs (copyrighted; see docs/SPECIFICATIONS.md)
+docs/specs/
+
+# Local agent/tooling state
+.zcode/

@@ -6,7 +6,7 @@ members = ["crates/safedir", "crates/safedir-cli"]
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-rust-version = "1.85"
+rust-version = "1.88"
 
 [workspace.dependencies]
 safedir = { path = "crates/safedir" }
@@ -20,7 +20,7 @@ reqwest = { version = "0.12", default-features = false, features = [
     "blocking",
     "rustls-tls",
 ] }
-quick-xml = "0.38"
+quick-xml = "0.41"
 clap = { version = "4", features = ["derive"] }
 proptest = "1"
 
