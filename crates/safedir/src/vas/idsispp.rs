@@ -71,8 +71,8 @@ pub fn parse_profile(pso_id: &str, profile_xml: &str) -> Result<SafeEntry, Error
                     let tech = e
                         .attributes()
                         .flatten()
-                        .find(|a| a.key.as_ref() == b"MsgTechnology")
-                        .map(|a| String::from_utf8_lossy(&a.value).into_owned())
+                        .find(|a| a.key.as_ref() == "MsgTechnology")
+                        .map(|a| a.value.to_string())
                         .unwrap_or_default();
                     contact_tech.push(tech);
                 }
@@ -85,7 +85,7 @@ pub fn parse_profile(pso_id: &str, profile_xml: &str) -> Result<SafeEntry, Error
             Event::Text(t) => {
                 // quick-xml hands out escaped content; unescape to real
                 // text (entity-encoded umlauts, &amp;, …).
-                let raw = String::from_utf8_lossy(&t).into_owned();
+                let raw = t.as_ref().to_owned();
                 let unescaped = match quick_xml::escape::unescape(&raw) {
                     Ok(u) => u.into_owned(),
                     Err(_) => raw,
@@ -93,11 +93,10 @@ pub fn parse_profile(pso_id: &str, profile_xml: &str) -> Result<SafeEntry, Error
                 text.push_str(&unescaped);
             }
             Event::CData(t) => {
-                text.push_str(&String::from_utf8_lossy(&t));
+                text.push_str(t.as_ref());
             }
             Event::GeneralRef(r) => {
-                let content = String::from_utf8_lossy(&r).into_owned();
-                text.push_str(&crate::vas::spml::resolve_reference(&content));
+                text.push_str(&crate::vas::spml::resolve_reference(r.as_ref()));
             }
             Event::End(_) => {
                 if let Some(local) = path.pop() {
@@ -295,10 +294,13 @@ fn cert_from_base64(b64: &str) -> Option<CertRef> {
 }
 
 fn local_name(e: &quick_xml::events::BytesStart<'_>) -> String {
-    let name = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+    local_name_of(e.name().as_ref())
+}
+
+fn local_name_of(name: &str) -> String {
     match name.split_once(':') {
         Some((_, local)) => local.to_owned(),
-        None => name,
+        None => name.to_owned(),
     }
 }
 

@@ -253,7 +253,7 @@ pub fn parse_response(xml: &str) -> Result<SpmlResponse, Error> {
             }
             Ok(Event::Text(t)) => {
                 // NOTE: quick-xml text is already escaped — push verbatim.
-                let raw = String::from_utf8_lossy(&t).into_owned();
+                let raw = t.as_ref().to_owned();
                 if in_data {
                     data_buf.push_str(&raw);
                 } else if in_error_message {
@@ -267,7 +267,7 @@ pub fn parse_response(xml: &str) -> Result<SpmlResponse, Error> {
             Ok(Event::CData(t)) => {
                 if in_data {
                     data_buf.push_str("<![CDATA[");
-                    data_buf.push_str(&String::from_utf8_lossy(&t));
+                    data_buf.push_str(t.as_ref());
                     data_buf.push_str("]]>");
                 }
             }
@@ -276,10 +276,10 @@ pub fn parse_response(xml: &str) -> Result<SpmlResponse, Error> {
                 // re-emit them verbatim so the escaped form survives.
                 if in_data {
                     data_buf.push('&');
-                    data_buf.push_str(&String::from_utf8_lossy(&r));
+                    data_buf.push_str(r.as_ref());
                     data_buf.push(';');
                 } else if in_error_message {
-                    error_text.push_str(&resolve_reference(&String::from_utf8_lossy(&r)));
+                    error_text.push_str(&resolve_reference(r.as_ref()));
                 }
             }
             Ok(Event::End(e)) => {
@@ -305,7 +305,7 @@ pub fn parse_response(xml: &str) -> Result<SpmlResponse, Error> {
                         data_buf.clear();
                     } else {
                         data_buf.push_str("</");
-                        data_buf.push_str(&String::from_utf8_lossy(e.name().as_ref()));
+                        data_buf.push_str(e.name().as_ref());
                         data_buf.push('>');
                     }
                 } else {
@@ -356,12 +356,12 @@ pub fn parse_response(xml: &str) -> Result<SpmlResponse, Error> {
 /// buffer; `self_closing` emits `<tag … />`.
 fn push_start_tag(buf: &mut String, e: &quick_xml::events::BytesStart<'_>, self_closing: bool) {
     buf.push('<');
-    buf.push_str(&String::from_utf8_lossy(e.name().as_ref()));
+    buf.push_str(e.name().as_ref());
     for a in e.attributes().flatten() {
         buf.push(' ');
-        buf.push_str(&String::from_utf8_lossy(a.key.as_ref()));
+        buf.push_str(a.key.as_ref());
         buf.push_str("=\"");
-        buf.push_str(&xml_escape(&String::from_utf8_lossy(&a.value)));
+        buf.push_str(&xml_escape(a.value.as_ref()));
         buf.push('"');
     }
     buf.push_str(if self_closing { " />" } else { ">" });
@@ -394,23 +394,22 @@ pub(crate) fn resolve_reference(content: &str) -> String {
 fn attr(e: &quick_xml::events::BytesStart<'_>, name: &str) -> Option<String> {
     e.attributes()
         .flatten()
-        .find(|a| a.key.as_ref() == name.as_bytes())
-        .map(|a| String::from_utf8_lossy(&a.value).into_owned())
+        .find(|a| a.key.as_ref() == name)
+        .map(|a| a.value.to_string())
 }
 
 fn local_name_start(e: &quick_xml::events::BytesStart<'_>) -> String {
-    let name = String::from_utf8_lossy(e.name().as_ref()).into_owned();
-    match name.split_once(':') {
-        Some((_, local)) => local.to_owned(),
-        None => name,
-    }
+    local_name_of(e.name().as_ref())
 }
 
 fn local_name_end(e: &quick_xml::events::BytesEnd<'_>) -> String {
-    let name = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+    local_name_of(e.name().as_ref())
+}
+
+fn local_name_of(name: &str) -> String {
     match name.split_once(':') {
         Some((_, local)) => local.to_owned(),
-        None => name,
+        None => name.to_owned(),
     }
 }
 
