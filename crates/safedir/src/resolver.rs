@@ -58,11 +58,14 @@ impl SearchTerm {
 pub struct SearchQuery {
     /// Vorname (contains ≥ 2 chars).
     pub vorname: Option<SearchTerm>,
+    /// Berufsbezeichnung (contains ≥ 5 chars, v1.5 table).
+    pub beruf: Option<SearchTerm>,
     /// Name/Organisation (contains ≥ 2 chars; shorter ⇒ exact search).
     pub name: Option<SearchTerm>,
     /// Kanzlei (contains/equals/begins ≥ 3 chars).
     pub kanzlei: Option<SearchTerm>,
-    /// Abteilung/Fachbereich (contains ≥ 3 chars; not in BRAK/BNotK/BStBK).
+    /// Abteilung/Fachbereich. NOT a v1.5 search parameter (ERR10 at the
+    /// VAS); kept for entry data — local backends can match on it.
     pub abteilung: Option<SearchTerm>,
     /// Straße (contains ≥ 3 chars).
     pub strasse: Option<SearchTerm>,
@@ -74,11 +77,14 @@ pub struct SearchQuery {
     pub ort: Option<SearchTerm>,
     /// Bundesland (equals; not in BRAK/BStBK directories).
     pub bundesland: Option<SearchTerm>,
-    /// Land (equals).
+    /// Land. NOT a v1.5 search parameter (ERR10 at the VAS); kept for
+    /// entry data.
     pub land: Option<SearchTerm>,
-    /// Telefonnummer (contains ≥ 5 chars).
+    /// Telefonnummer. NOT a v1.5 search parameter (ERR10 at the VAS);
+    /// kept for entry data.
     pub telefon: Option<SearchTerm>,
-    /// Mobiltelefonnummer (contains ≥ 5 chars).
+    /// Mobiltelefonnummer. NOT a v1.5 search parameter (ERR10 at the
+    /// VAS); kept for entry data.
     pub mobil: Option<SearchTerm>,
     /// Exact SAFE-ID match (allowed in `search` since standard v1.1).
     pub safe_id: Option<SafeId>,
@@ -99,14 +105,19 @@ impl SearchQuery {
     }
 
     /// Does an entry satisfy this query? (AND across parameters, A11.)
+    /// An empty query (A4) matches nothing.
     #[must_use]
     pub fn matches(&self, entry: &SafeEntry) -> bool {
+        if self.is_empty() {
+            return false;
+        }
         let text = |t: &Option<SearchTerm>, f: Option<&str>| {
             // A term against a field the entry does not carry cannot match.
             t.as_ref().map(|t| f.is_some_and(|f| t.matches(f)))
         };
         let checks = [
             text(&self.vorname, entry.vorname.as_deref()),
+            text(&self.beruf, entry.beruf.as_deref()),
             text(&self.name, Some(entry.name.as_str())),
             text(&self.kanzlei, entry.kanzlei.as_deref()),
             text(&self.abteilung, entry.abteilung.as_deref()),
@@ -123,7 +134,7 @@ impl SearchQuery {
             return false;
         }
         if let Some(id) = &self.safe_id {
-            if id.as_str() != entry.safe_id.as_str() {
+            if !id.as_str().eq_ignore_ascii_case(entry.safe_id.as_str()) {
                 return false;
             }
         }
@@ -131,15 +142,78 @@ impl SearchQuery {
             if !entry
                 .dienststellen_ids
                 .iter()
-                .any(|d| d.as_str() == ds.as_str())
+                .any(|d| d.as_str().eq_ignore_ascii_case(ds.as_str()))
             {
                 return false;
             }
         }
-        if !self.roles.is_empty() && !entry.roles.iter().any(|r| self.roles.contains(r)) {
+        if !self.roles.is_empty()
+            && !entry.roles.iter().any(|r| {
+                self.roles
+                    .iter()
+                    .any(|q| q.token().eq_ignore_ascii_case(&r.token()))
+            })
+        {
             return false;
         }
         true
+    }
+
+    /// Is the query empty (no parameters, no role filters)? A4 forbids
+    /// empty searches.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.vorname.is_none()
+            && self.beruf.is_none()
+            && self.name.is_none()
+            && self.kanzlei.is_none()
+            && self.abteilung.is_none()
+            && self.strasse.is_none()
+            && self.hausnummer.is_none()
+            && self.plz.is_none()
+            && self.ort.is_none()
+            && self.bundesland.is_none()
+            && self.land.is_none()
+            && self.telefon.is_none()
+            && self.mobil.is_none()
+            && self.safe_id.is_none()
+            && self.dienststellen_id.is_none()
+            && self.roles.is_empty()
+    }
+
+    /// Re-check a hand-built query against the standard's rules (the
+    /// builder enforces them; public fields do not). Checks A4 and the
+    /// per-attribute minimum lengths of the v1.5-searchable parameters.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidQuery`] naming the offending field.
+    pub fn validate(&self) -> Result<(), Error> {
+        if self.is_empty() {
+            return Err(Error::InvalidQuery(
+                "search without parameters is not possible (A4)".into(),
+            ));
+        }
+        let mins: [(&str, &Option<SearchTerm>, usize); 8] = [
+            ("vorname", &self.vorname, 2),
+            ("name", &self.name, 1), // below 2 degrades to exact (A14)
+            ("beruf", &self.beruf, 5),
+            ("kanzlei", &self.kanzlei, 3),
+            ("strasse", &self.strasse, 3),
+            ("hausnummer", &self.hausnummer, 1),
+            ("plz", &self.plz, 1),
+            ("ort", &self.ort, 2),
+        ];
+        for (field, term, min) in mins {
+            if let Some(t) = term {
+                if t.value.trim().chars().count() < min {
+                    return Err(Error::InvalidQuery(format!(
+                        "{field}: needs at least {min} characters (ERR30)"
+                    )));
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -204,6 +278,30 @@ impl SearchQueryBuilder {
         Ok(self)
     }
 
+    /// Berufsbezeichnung, contains ≥ 5.
+    pub fn beruf_contains(mut self, v: &str) -> Result<Self, Error> {
+        set_term(&mut self.query.beruf, SearchKind::Contains, v, 5, "beruf")?;
+        Ok(self)
+    }
+
+    /// Postleitzahl, begins ≥ 1.
+    pub fn plz_begins(mut self, v: &str) -> Result<Self, Error> {
+        set_term(&mut self.query.plz, SearchKind::BeginsWith, v, 1, "plz")?;
+        Ok(self)
+    }
+
+    /// Bundesland, equals.
+    pub fn bundesland_equals(mut self, v: &str) -> Result<Self, Error> {
+        set_term(
+            &mut self.query.bundesland,
+            SearchKind::Equals,
+            v,
+            1,
+            "bundesland",
+        )?;
+        Ok(self)
+    }
+
     /// Kanzlei, contains ≥ 3.
     pub fn kanzlei_contains(mut self, v: &str) -> Result<Self, Error> {
         set_term(
@@ -212,18 +310,6 @@ impl SearchQueryBuilder {
             v,
             3,
             "kanzlei",
-        )?;
-        Ok(self)
-    }
-
-    /// Abteilung/Fachbereich, contains ≥ 3.
-    pub fn abteilung_contains(mut self, v: &str) -> Result<Self, Error> {
-        set_term(
-            &mut self.query.abteilung,
-            SearchKind::Contains,
-            v,
-            3,
-            "abteilung",
         )?;
         Ok(self)
     }
@@ -258,48 +344,6 @@ impl SearchQueryBuilder {
         Ok(self)
     }
 
-    /// Postleitzahl, begins ≥ 1.
-    pub fn plz_begins(mut self, v: &str) -> Result<Self, Error> {
-        set_term(&mut self.query.plz, SearchKind::BeginsWith, v, 1, "plz")?;
-        Ok(self)
-    }
-
-    /// Bundesland, equals.
-    pub fn bundesland(mut self, v: &str) -> Result<Self, Error> {
-        set_term(
-            &mut self.query.bundesland,
-            SearchKind::Equals,
-            v,
-            1,
-            "bundesland",
-        )?;
-        Ok(self)
-    }
-
-    /// Land, equals.
-    pub fn land(mut self, v: &str) -> Result<Self, Error> {
-        set_term(&mut self.query.land, SearchKind::Equals, v, 1, "land")?;
-        Ok(self)
-    }
-
-    /// Telefon, contains ≥ 5.
-    pub fn telefon_contains(mut self, v: &str) -> Result<Self, Error> {
-        set_term(
-            &mut self.query.telefon,
-            SearchKind::Contains,
-            v,
-            5,
-            "telefon",
-        )?;
-        Ok(self)
-    }
-
-    /// Mobil, contains ≥ 5.
-    pub fn mobil_contains(mut self, v: &str) -> Result<Self, Error> {
-        set_term(&mut self.query.mobil, SearchKind::Contains, v, 5, "mobil")?;
-        Ok(self)
-    }
-
     /// Exact SAFE-ID.
     pub fn safe_id(mut self, id: SafeId) -> Self {
         self.query.safe_id = Some(id);
@@ -322,6 +366,7 @@ impl SearchQueryBuilder {
     pub fn build(self) -> Result<SearchQuery, Error> {
         let q = &self.query;
         let any = q.vorname.is_some()
+            || q.beruf.is_some()
             || q.name.is_some()
             || q.kanzlei.is_some()
             || q.abteilung.is_some()
@@ -414,7 +459,6 @@ mod tests {
     fn builder_enforces_minimums() {
         assert!(SearchQuery::builder().vorname_contains("a").is_err());
         assert!(SearchQuery::builder().ort_contains("b").is_err());
-        assert!(SearchQuery::builder().telefon_contains("1234").is_err());
         assert!(SearchQuery::builder().build().is_err());
         // Short name degrades to exact (A14)
         let q = SearchQuery::builder()

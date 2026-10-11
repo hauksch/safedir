@@ -100,13 +100,15 @@ pub fn search_request(query: &crate::resolver::SearchQuery) -> String {
         }
     };
 
+    // Only v1.5-searchable attributes are encoded; anything else would
+    // draw ERR10 from the VAS (A1/A4).
     push_term("/CommonName/AnalyzedName/FN", &query.vorname);
     push_term("/CommonName/AnalyzedName/SN", &query.name);
-    push_term("/Extension/EJusticeAttributes/Kanzlei", &query.kanzlei);
     push_term(
-        "/Extension/EJusticeAttributes/AlternativeOrganization",
-        &query.abteilung,
+        "/Extension/EJusticeAttributes/ProfessionProperty",
+        &query.beruf,
     );
+    push_term("/Extension/EJusticeAttributes/Kanzlei", &query.kanzlei);
     push_term("/AddressCard/Address/Extension/StreetName", &query.strasse);
     push_term(
         "/AddressCard/Address/Extension/HouseNumber",
@@ -115,15 +117,6 @@ pub fn search_request(query: &crate::resolver::SearchQuery) -> String {
     push_term("/AddressCard/Address/PostalCode", &query.plz);
     push_term("/AddressCard/Address/L", &query.ort);
     push_term("/AddressCard/Address/St", &query.bundesland);
-    push_term("/AddressCard/Address/C", &query.land);
-    push_term(
-        "/MsgContact[MsgTechnology=\"urn:liberty:id-sis-pp:msgTechnology:pots\"]/MsgAccount",
-        &query.telefon,
-    );
-    push_term(
-        "/MsgContact[MsgTechnology=\"urn:de:egov:names:fim:1.0:idsis-pp:msgTechnology:cellPhone\"]/MsgAccount",
-        &query.mobil,
-    );
     if let Some(id) = &query.safe_id {
         operands.push_str(&format!(
             "<dsml:equalityMatch name=\"/safe.id\"><dsml:value>{}</dsml:value>\
@@ -603,15 +596,32 @@ mod tests {
     }
 
     #[test]
-    fn telefon_xpath_uses_liberty_urn() {
+    fn non_searchable_terms_are_not_encoded() {
+        let mut query = crate::resolver::SearchQuery::builder()
+            .ort_contains("Bonn")
+            .unwrap()
+            .build()
+            .unwrap();
+        // Hand-built non-searchable extras must not leak into the request.
+        query.telefon = Some(crate::resolver::SearchTerm {
+            kind: crate::resolver::SearchKind::Contains,
+            value: "+49228".into(),
+        });
+        let xml = search_request(&query);
+        assert!(!xml.contains("msgTechnology"));
+        assert!(xml.contains("/AddressCard/Address/L"));
+    }
+
+    #[test]
+    fn beruf_term_uses_profession_xpath() {
         let query = crate::resolver::SearchQuery::builder()
-            .telefon_contains("+49228")
+            .beruf_contains("Rechtsanwalt")
             .unwrap()
             .build()
             .unwrap();
         let xml = search_request(&query);
-        assert!(xml.contains("urn:liberty:id-sis-pp:msgTechnology:pots"));
-        assert!(!xml.contains("fim:1.0:idsis-pp:msgTechnology:pots"));
+        assert!(xml.contains("/Extension/EJusticeAttributes/ProfessionProperty"));
+        assert!(xml.contains("Rechtsanwalt"));
     }
 
     fn base64_of_test_cert() -> String {

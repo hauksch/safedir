@@ -45,7 +45,7 @@ impl SafeDirectory for InMemoryResolver {
         Ok(self
             .entries
             .iter()
-            .find(|e| e.safe_id.as_str() == id.as_str())
+            .find(|e| e.safe_id.as_str().eq_ignore_ascii_case(id.as_str()))
             .cloned())
     }
 
@@ -63,6 +63,11 @@ impl SafeDirectory for InMemoryResolver {
     }
 
     fn search(&self, query: &SearchQuery) -> Result<SearchOutcome, Error> {
+        if query.is_empty() {
+            return Err(Error::InvalidQuery(
+                "search without parameters is not possible (A4)".into(),
+            ));
+        }
         let count = self.entries.iter().filter(|e| query.matches(e)).count();
         if count > MAX_HITS {
             // A15–A17: more than MAX_HITS hits are NOT returned; the

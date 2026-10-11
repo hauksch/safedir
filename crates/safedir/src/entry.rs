@@ -198,6 +198,12 @@ pub enum EntryState {
     /// time. Mirrors the directories' A9 behaviour of silently hiding such
     /// entries.
     CertsExpired,
+    /// Certificates exist but are not yet valid at the reference time
+    /// (OSCI would reject with the 37xx "zeitlich ungültig" series).
+    CertsNotYetValid,
+    /// No recipient or reader certificates at all — the postbox cannot be
+    /// encrypted for.
+    NoCerts,
     /// Certificate validity unknown (no `x509` feature / unparsed certs):
     /// expiry cannot be judged.
     CertsUnknown,
@@ -273,10 +279,12 @@ impl SafeEntry {
 
     /// Derive the operational state at a reference time (Unix seconds).
     ///
-    /// Certificate logic: if any recipient *or* reader certificate is valid
-    /// at `now`, the entry counts as cert-wise usable. If every cert with a
-    /// known window has expired and none is valid, `CertsExpired`. If no
-    /// window is known at all, `CertsUnknown`.
+    /// Evaluation order: role-based states first (inactive, certificate
+    /// changeover), then the **intermediary** certificate (a dead outer
+    /// envelope key makes delivery impossible regardless of content keys),
+    /// then the content-encryption certificates. `Active` requires a
+    /// currently-valid *recipient* certificate (readers only count when no
+    /// recipient certificates exist — EGVP merges Leser ≡ Empfänger).
     #[must_use]
     pub fn state(&self, now_unix: i64) -> EntryState {
         if self.roles.is_empty() {
@@ -285,21 +293,35 @@ impl SafeEntry {
         if self.roles.len() == 1 && self.roles[0] == RoleValue::Zertifikatswechsel {
             return EntryState::CertificateChange;
         }
-        let certs = self
-            .osci
-            .recipient_cipher
-            .iter()
-            .chain(&self.osci.reader_cipher);
+        let inter = &self.osci.intermediary_cipher;
+        if inter.valid_at(now_unix) == Some(false) {
+            return if inter.not_before.is_some_and(|nb| now_unix < nb) {
+                EntryState::CertsNotYetValid
+            } else {
+                EntryState::CertsExpired
+            };
+        }
+        if self.osci.recipient_cipher.is_empty() && self.osci.reader_cipher.is_empty() {
+            return EntryState::NoCerts;
+        }
+        let primary: Vec<&CertRef> = if self.osci.recipient_cipher.is_empty() {
+            self.osci.reader_cipher.iter().collect()
+        } else {
+            self.osci.recipient_cipher.iter().collect()
+        };
         let mut any_valid = false;
-        let mut any_known = false;
+        let mut any_expired = false;
         let mut any_future = false;
-        for c in certs {
+        let mut any_known = false;
+        for c in primary {
             match c.valid_at(now_unix) {
                 Some(true) => any_valid = true,
                 Some(false) => {
                     any_known = true;
                     if c.not_before.is_some_and(|nb| now_unix < nb) {
                         any_future = true;
+                    } else {
+                        any_expired = true;
                     }
                 }
                 None => {}
@@ -309,9 +331,8 @@ impl SafeEntry {
             EntryState::Active
         } else if !any_known {
             EntryState::CertsUnknown
-        } else if any_future {
-            // Not yet valid: same bucket as unknown for our purposes.
-            EntryState::CertsUnknown
+        } else if any_future && !any_expired {
+            EntryState::CertsNotYetValid
         } else {
             EntryState::CertsExpired
         }
@@ -384,6 +405,50 @@ mod tests {
             now + 100,
         );
         assert_eq!(mixed.state(now), EntryState::Active);
+    }
+
+    #[test]
+    fn state_covers_intermediary_notyetvalid_and_nocerts() {
+        let now = 1_760_000_000;
+        let base = entry(&[RoleValue::EgvpJustiz], now - 100, now + 100);
+
+        // Dead intermediary cert blocks delivery even with valid
+        // recipient certs.
+        let mut dead_inter = base.clone();
+        dead_inter.osci.intermediary_cipher =
+            CertRef::__test_with_validity(TEST_CERT_PEM, now - 200, now - 100);
+        assert_eq!(dead_inter.state(now), EntryState::CertsExpired);
+
+        // Intermediary not yet valid.
+        let mut future_inter = base.clone();
+        future_inter.osci.intermediary_cipher =
+            CertRef::__test_with_validity(TEST_CERT_PEM, now + 50, now + 100);
+        assert_eq!(future_inter.state(now), EntryState::CertsNotYetValid);
+
+        // No recipient/reader certs at all.
+        let mut no_certs = base.clone();
+        no_certs.osci.recipient_cipher = vec![];
+        no_certs.osci.reader_cipher = vec![];
+        assert_eq!(no_certs.state(now), EntryState::NoCerts);
+
+        // Reader-only certs still evaluate (Leser ≡ Empfänger merge).
+        let mut reader_only = base.clone();
+        reader_only.osci.recipient_cipher = vec![];
+        reader_only.osci.reader_cipher = vec![CertRef::__test_with_validity(
+            TEST_CERT_PEM,
+            now - 100,
+            now + 100,
+        )];
+        assert_eq!(reader_only.state(now), EntryState::Active);
+
+        // Recipient not yet valid.
+        let mut future_recipient = base.clone();
+        future_recipient.osci.recipient_cipher = vec![CertRef::__test_with_validity(
+            TEST_CERT_PEM,
+            now + 50,
+            now + 100,
+        )];
+        assert_eq!(future_recipient.state(now), EntryState::CertsNotYetValid);
     }
 
     #[test]

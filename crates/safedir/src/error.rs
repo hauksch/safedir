@@ -63,6 +63,12 @@ pub enum ParseSafeIdError {
         /// The offending prefix.
         found: String,
     },
+    /// Input exceeds the accepted length (a SAFE-ID is <= ~60 chars).
+    #[error("SAFE-ID exceeds {limit} characters")]
+    TooLong {
+        /// The enforced limit.
+        limit: usize,
+    },
 }
 
 /// Top-level error of the crate.

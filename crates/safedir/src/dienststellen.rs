@@ -46,8 +46,9 @@ impl FromStr for DienststellenId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let trimmed = s.trim();
-        // Be forgiving about an already-prefixed form.
-        let bare = trimmed.strip_prefix(WIRE_PREFIX).unwrap_or(trimmed);
+        // Be forgiving about an already-prefixed form (incl. trailing
+        // space after the colon).
+        let bare = trimmed.strip_prefix(WIRE_PREFIX).unwrap_or(trimmed).trim();
         if bare.is_empty() {
             return Err(Error::ParseDienststellen("empty".to_owned()));
         }
