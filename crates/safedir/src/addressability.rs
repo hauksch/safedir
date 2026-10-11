@@ -8,8 +8,10 @@
 //! ERV-Leitfaden v1.6, section 4.2:
 //!
 //! - beA, beN, beSt and beBPo address each other, the justice postboxes and
-//!   (Behörden) — and can be addressed by everyone incl. eBO/MJP holders.
-//! - eBO addresses justiz/Behörden/besondere Postfächer; eBO↔eBO only via
+//!   Behörden — and are addressable by all senders except `egvp_buerger`
+//!   and `egvp_test`.
+//! - eBO addresses justiz/besondere Postfächer plus `buerger_rueck` (not
+//!   `egvp_behoerde`); eBO↔eBO only via
 //!   additional intermediary services ("eBO-plus") — with statutory
 //!   exceptions for Gerichtsvollzieher, Patentanwälte and parties'
 //!   representatives (ERV-Leitfaden footnote 10).
@@ -88,7 +90,7 @@ impl core::fmt::Display for Reason {
                 receiver_roles
             ),
             Self::SenderHasNoRoles => write!(f, "sender has no role values"),
-            Self::Inactive => write!(f, "postbox is inactive (no role values, ERR20)"),
+            Self::Inactive => write!(f, "postbox is inactive (no role values, ERR20-analogue)"),
             Self::CertificateChange => write!(f, "postbox is shielded for certificate changeover"),
             Self::CertsExpired => write!(f, "all known encryption certificates expired"),
             Self::CertsNotYetValid => write!(f, "certificates not yet valid"),

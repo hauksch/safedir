@@ -295,6 +295,10 @@ impl SafeEntry {
         if self.roles.is_empty() {
             return EntryState::Inactive;
         }
+        // The ident-admin guides require `zertifikatswechsel` to be the
+        // *sole* role (all others deleted). A mixed entry is undefined
+        // dirty data; we deliberately fall through to the regular role
+        // evaluation rather than guessing a shield state.
         if self.roles.len() == 1 && self.roles[0] == RoleValue::Zertifikatswechsel {
             return EntryState::CertificateChange;
         }

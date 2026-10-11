@@ -12,6 +12,13 @@ pub struct InMemoryResolver {
     entries: Vec<SafeEntry>,
 }
 
+fn now_unix() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or_default()
+}
+
 impl InMemoryResolver {
     /// Empty directory.
     #[must_use]
@@ -42,9 +49,13 @@ impl InMemoryResolver {
 
 impl SafeDirectory for InMemoryResolver {
     fn lookup_safe_id(&self, id: &SafeId) -> Result<Option<SafeEntry>, Error> {
+        let now = now_unix();
         Ok(self
             .entries
             .iter()
+            // A9: entries with expired encryption certificates are not
+            // returned by search or lookup — silently.
+            .filter(|e| e.state(now) != crate::entry::EntryState::CertsExpired)
             .find(|e| e.safe_id.as_str().eq_ignore_ascii_case(id.as_str()))
             .cloned())
     }
@@ -68,18 +79,26 @@ impl SafeDirectory for InMemoryResolver {
                 "search without parameters is not possible (A4)".into(),
             ));
         }
-        let count = self.entries.iter().filter(|e| query.matches(e)).count();
+        let now = now_unix();
+        let count = self
+            .entries
+            .iter()
+            .filter(|e| e.state(now) != crate::entry::EntryState::CertsExpired)
+            .filter(|e| query.matches(e))
+            .count();
         if count > MAX_HITS {
             // A15–A17: more than MAX_HITS hits are NOT returned; the
             // requester gets the ERR40 error and must narrow the query.
             return Err(Error::Directory(
                 crate::error::ErrCode::Err40,
-                crate::error::ErrCode::Err40.message().to_owned(),
+                crate::error::ErrCode::Err40.message(),
             ));
         }
         let entries: Vec<SafeEntry> = self
             .entries
             .iter()
+            // A9 (see lookup_safe_id).
+            .filter(|e| e.state(now) != crate::entry::EntryState::CertsExpired)
             .filter(|e| query.matches(e))
             .cloned()
             .collect();

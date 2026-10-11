@@ -181,21 +181,65 @@ impl SearchQuery {
     }
 
     /// Re-check a hand-built query against the standard's rules (the
-    /// builder enforces them; public fields do not). Checks A4 and the
-    /// per-attribute minimum lengths of the v1.5-searchable parameters.
+    /// builder enforces them; public fields do not):
+    /// - A4: empty queries and queries consisting *only* of non-searchable
+    ///   parameters are rejected (the VAS would answer ERR10);
+    /// - per-attribute minimum lengths (ERR30);
+    /// - per-attribute kind legality (ERR50): the § 4 table prescribes
+    ///   exactly one "Art der Suche" per attribute;
+    /// - A14: a hand-built `name` term below 2 characters is coerced to an
+    ///   exact search.
     ///
     /// # Errors
     ///
     /// [`Error::InvalidQuery`] naming the offending field.
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&mut self) -> Result<(), Error> {
         if self.is_empty() {
             return Err(Error::InvalidQuery(
                 "search without parameters is not possible (A4)".into(),
             ));
         }
+        // Which fields are non-searchable (no "search" column in § 4)?
+        let non_searchable_set = self.abteilung.is_some() as usize
+            + self.land.is_some() as usize
+            + self.telefon.is_some() as usize
+            + self.mobil.is_some() as usize;
+        let searchable_set = self.vorname.is_some() as usize
+            + self.beruf.is_some() as usize
+            + self.name.is_some() as usize
+            + self.kanzlei.is_some() as usize
+            + self.strasse.is_some() as usize
+            + self.hausnummer.is_some() as usize
+            + self.plz.is_some() as usize
+            + self.ort.is_some() as usize
+            + self.bundesland.is_some() as usize
+            + self.safe_id.is_some() as usize
+            + self.dienststellen_id.is_some() as usize
+            + (!self.roles.is_empty()) as usize;
+        if searchable_set == 0 && non_searchable_set > 0 {
+            return Err(Error::InvalidQuery(format!(
+                "search contains non-searchable parameters only: {:?} (A1/A4, ERR10)",
+                ["abteilung", "land", "telefon", "mobil"]
+                    .into_iter()
+                    .filter(|f| match *f {
+                        "abteilung" => self.abteilung.is_some(),
+                        "land" => self.land.is_some(),
+                        "telefon" => self.telefon.is_some(),
+                        _ => self.mobil.is_some(),
+                    })
+                    .collect::<Vec<_>>()
+            )));
+        }
+        // A14: hand-built short Contains name degrades to exact.
+        if let Some(t) = &mut self.name
+            && t.kind == SearchKind::Contains
+            && t.value.trim().chars().count() < 2
+        {
+            t.kind = SearchKind::Equals;
+        }
         let mins: [(&str, &Option<SearchTerm>, usize); 8] = [
             ("vorname", &self.vorname, 2),
-            ("name", &self.name, 1), // below 2 degrades to exact (A14)
+            ("name", &self.name, 1),
             ("beruf", &self.beruf, 5),
             ("kanzlei", &self.kanzlei, 3),
             ("strasse", &self.strasse, 3),
@@ -209,6 +253,39 @@ impl SearchQuery {
             {
                 return Err(Error::InvalidQuery(format!(
                     "{field}: needs at least {min} characters (ERR30)"
+                )));
+            }
+        }
+        // Kind legality per the § 4 table (ERR50).
+        let kind_checks: [(&str, &Option<SearchTerm>, &[SearchKind]); 8] = [
+            ("vorname", &self.vorname, &[SearchKind::Contains]),
+            (
+                "name",
+                &self.name,
+                &[SearchKind::Contains, SearchKind::Equals],
+            ),
+            ("beruf", &self.beruf, &[SearchKind::Contains]),
+            (
+                "kanzlei",
+                &self.kanzlei,
+                &[
+                    SearchKind::Contains,
+                    SearchKind::Equals,
+                    SearchKind::BeginsWith,
+                ],
+            ),
+            ("strasse", &self.strasse, &[SearchKind::Contains]),
+            ("hausnummer", &self.hausnummer, &[SearchKind::Contains]),
+            ("plz", &self.plz, &[SearchKind::BeginsWith]),
+            ("ort", &self.ort, &[SearchKind::Contains]),
+        ];
+        for (field, term, allowed) in kind_checks {
+            if let Some(t) = term
+                && !allowed.contains(&t.kind)
+            {
+                return Err(Error::InvalidQuery(format!(
+                    "{field}: search kind {:?} is not allowed for this element (ERR50)",
+                    t.kind
                 )));
             }
         }
@@ -301,6 +378,24 @@ impl SearchQueryBuilder {
         Ok(self)
     }
 
+    /// Kanzlei, equals (≥ 3).
+    pub fn kanzlei_equals(mut self, v: &str) -> Result<Self, Error> {
+        set_term(&mut self.query.kanzlei, SearchKind::Equals, v, 3, "kanzlei")?;
+        Ok(self)
+    }
+
+    /// Kanzlei, begins ≥ 3.
+    pub fn kanzlei_begins(mut self, v: &str) -> Result<Self, Error> {
+        set_term(
+            &mut self.query.kanzlei,
+            SearchKind::BeginsWith,
+            v,
+            3,
+            "kanzlei",
+        )?;
+        Ok(self)
+    }
+
     /// Kanzlei, contains ≥ 3.
     pub fn kanzlei_contains(mut self, v: &str) -> Result<Self, Error> {
         set_term(
@@ -385,7 +480,9 @@ impl SearchQueryBuilder {
                 "search without parameters is not possible (A4)".into(),
             ));
         }
-        Ok(self.query)
+        let mut query = self.query;
+        query.validate()?;
+        Ok(query)
     }
 }
 

@@ -94,13 +94,19 @@ enum Command {
 }
 
 /// Print a line, exiting quietly when the reader closed the pipe
-/// (`… | head` must not panic).
+/// (`… | head` must not panic). C0 control characters and ANSI escape
+/// sequences from directory/VAS-controlled data are neutralized so the
+/// human-readable output cannot forge log lines or manipulate terminals.
 fn out(line: &str) {
     use std::io::Write;
+    let cleaned: String = line
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
     let stdout = std::io::stdout();
     let mut lock = stdout.lock();
     if lock
-        .write_all(line.as_bytes())
+        .write_all(cleaned.as_bytes())
         .and_then(|_| lock.write_all(b"\n"))
         .is_err()
     {

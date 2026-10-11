@@ -32,9 +32,11 @@ use crate::error::Error;
 use crate::roles::RoleValue;
 use crate::safe_id::SafeId;
 
-const TECH_POTS: &str = ":msgTechnology:pots";
-const TECH_CELL: &str = ":msgTechnology:cellPhone";
-const TECH_OSCI: &str = "osci12Postbox";
+// The spec's URN prefixes vary per row (liberty `id-sis-pp`, fim
+// `idsis-pp`, safe `id-sis-pp`); matching is on the unambiguous suffix.
+const TECH_POTS_SUFFIX: &str = ":msgTechnology:pots";
+const TECH_CELL_SUFFIX: &str = ":msgTechnology:cellPhone";
+const TECH_OSCI_SUFFIX: &str = ":msgTechnology:osci12Postbox";
 
 /// Parse one profile payload. `pso_id` supplies the SAFE-ID (the standard's
 /// `/safe.id`).
@@ -71,8 +73,12 @@ pub fn parse_profile(pso_id: &str, profile_xml: &str) -> Result<SafeEntry, Error
                     let tech = e
                         .attributes()
                         .flatten()
-                        .find(|a| a.key.as_ref() == b"MsgTechnology")
-                        .map(|a| String::from_utf8_lossy(&a.value).into_owned())
+                        .find(|a| a.key.as_ref() == "MsgTechnology")
+                        .map(|a| {
+                            quick_xml::escape::unescape(a.value.as_ref())
+                                .map(|c| c.into_owned())
+                                .unwrap_or_else(|_| a.value.to_string())
+                        })
                         .unwrap_or_default();
                     contact_tech.push(tech);
                 }
@@ -85,7 +91,7 @@ pub fn parse_profile(pso_id: &str, profile_xml: &str) -> Result<SafeEntry, Error
             Event::Text(t) => {
                 // quick-xml hands out escaped content; unescape to real
                 // text (entity-encoded umlauts, &amp;, …).
-                let raw = String::from_utf8_lossy(&t).into_owned();
+                let raw = t.as_ref().to_owned();
                 let unescaped = match quick_xml::escape::unescape(&raw) {
                     Ok(u) => u.into_owned(),
                     Err(_) => raw,
@@ -93,11 +99,10 @@ pub fn parse_profile(pso_id: &str, profile_xml: &str) -> Result<SafeEntry, Error
                 text.push_str(&unescaped);
             }
             Event::CData(t) => {
-                text.push_str(&String::from_utf8_lossy(&t));
+                text.push_str(t.as_ref());
             }
             Event::GeneralRef(r) => {
-                let content = String::from_utf8_lossy(&r).into_owned();
-                text.push_str(&crate::vas::spml::resolve_reference(&content));
+                text.push_str(&crate::vas::spml::resolve_reference(r.as_ref()));
             }
             Event::End(_) => {
                 if let Some(local) = path.pop() {
@@ -227,9 +232,9 @@ fn assign(
         "C" if tail(1) == "Address" => p.c = Some(text.to_owned()),
         "MsgAccount" => {
             if let Some(t) = tech {
-                if t.contains(TECH_POTS) {
+                if t.ends_with(TECH_POTS_SUFFIX) {
                     p.telefon = Some(text.to_owned());
-                } else if t.contains(TECH_CELL) {
+                } else if t.ends_with(TECH_CELL_SUFFIX) {
                     p.mobil = Some(text.to_owned());
                 }
             }
@@ -254,12 +259,12 @@ fn assign(
         },
         // OSCI parameters only inside an osci12Postbox contact.
         "IntermedAddress" => {
-            if tech.is_some_and(|t| t.contains(TECH_OSCI)) {
+            if tech.is_some_and(|t| t.ends_with(TECH_OSCI_SUFFIX)) {
                 p.intermed_address = Some(text.to_owned());
             }
         }
         "IntermedEncryptKey" | "RecipientEncryptKey" | "ReaderEncryptKey" => {
-            if !tech.is_some_and(|t| t.contains(TECH_OSCI)) {
+            if !tech.is_some_and(|t| t.ends_with(TECH_OSCI_SUFFIX)) {
                 return;
             }
             match cert_from_base64(text) {
@@ -275,7 +280,9 @@ fn assign(
     }
 }
 
-/// Re-armor base64 DER certificate text as PEM and fingerprint it.
+/// Re-armor base64 DER certificate text as PEM and fingerprint it. The
+/// DER must structurally parse as an X.509 certificate (feature `x509`);
+/// garbage that merely base64-decodes is rejected.
 fn cert_from_base64(b64: &str) -> Option<CertRef> {
     let cleaned: String = b64.chars().filter(|c| !c.is_whitespace()).collect();
     if cleaned.is_empty() {
@@ -284,6 +291,10 @@ fn cert_from_base64(b64: &str) -> Option<CertRef> {
     let der = base64::engine::general_purpose::STANDARD
         .decode(cleaned.as_bytes())
         .ok()?;
+    #[cfg(feature = "x509")]
+    if x509_parser::parse_x509_certificate(&der).is_err() {
+        return None;
+    }
     let encoded = base64::engine::general_purpose::STANDARD.encode(&der);
     let mut pem = String::from("-----BEGIN CERTIFICATE-----\n");
     for line in encoded.as_bytes().chunks(64) {
@@ -295,10 +306,13 @@ fn cert_from_base64(b64: &str) -> Option<CertRef> {
 }
 
 fn local_name(e: &quick_xml::events::BytesStart<'_>) -> String {
-    let name = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+    local_name_of(e.name().as_ref())
+}
+
+fn local_name_of(name: &str) -> String {
     match name.split_once(':') {
         Some((_, local)) => local.to_owned(),
-        None => name,
+        None => name.to_owned(),
     }
 }
 
@@ -312,15 +326,15 @@ mod tests {
 <pp:CommonName><pp:AnalyzedName><pp:FN>Max</pp:FN><pp:SN>Mustermann</pp:SN></pp:AnalyzedName></pp:CommonName>\
 <pp:AddressCard><pp:Address><pp:PostalCode>53111</pp:PostalCode><pp:L>Bonn</pp:L><pp:St>Nordrhein-Westfalen</pp:St><pp:C>DE</pp:C>\
 <pp:Extension><pp:StreetName>Am Hof</pp:StreetName><pp:HouseNumber>1a</pp:HouseNumber></pp:Extension></pp:Address></pp:AddressCard>\
-<pp:MsgContact MsgTechnology=\"urn:de:egov:names:safe:1.0:idsis-pp:msgTechnology:osci12Postbox\">\
+<pp:MsgContact MsgTechnology=\"urn:de:egov:names:safe:1.0:id-sis-pp:msgTechnology:osci12Postbox\">\
 <pp:MsgAccount>postfach@justiz</pp:MsgAccount>\
-<pp:Extension><safe:OsciMsgParameter xmlns:safe=\"urn:de:egov:names:safe:1.0:id-sispp:extension\">\
+<pp:Extension><safe:OsciMsgParameter xmlns:safe=\"urn:de:egov:names:safe:1.0:id-sis-pp:extension\">\
 <safe:IntermedAddress>https://intermediaer.example/entry</safe:IntermedAddress>\
 <safe:IntermedEncryptKey>{cert_b64}</safe:IntermedEncryptKey>\
 <safe:RecipientEncryptKey>{cert_b64}</safe:RecipientEncryptKey>\
 <safe:ReaderEncryptKey>{cert_b64}</safe:ReaderEncryptKey>\
 </safe:OsciMsgParameter></pp:Extension></pp:MsgContact>\
-<pp:Extension><safe:EJusticeAttributes xmlns:safe=\"urn:de:egov:names:safe:1.0:id-sispp:extension\">\
+<pp:Extension><safe:EJusticeAttributes xmlns:safe=\"urn:de:egov:names:safe:1.0:id-sis-pp:extension\">\
 <safe:ProfessionProperty>Rechtsanwalt</safe:ProfessionProperty><safe:Kanzlei>Kanzlei am Hof</safe:Kanzlei>\
 <safe:ExternalID>301125T</safe:ExternalID>\
 <safe:Roles><safe:RoleValue>egvp_beA</safe:RoleValue></safe:Roles>\
