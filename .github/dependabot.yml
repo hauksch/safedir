@@ -14,3 +14,8 @@ updates:
     groups:
       action-deps:
         patterns: ["*"]
+    ignore:
+      # dtolnay/rust-toolchain is pinned to the workspace MSRV, not to the
+      # latest Rust release — bumping it would silently defeat the check.
+      - dependency-name: "dtolnay/rust-toolchain"
+
