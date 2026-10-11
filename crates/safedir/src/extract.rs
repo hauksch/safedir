@@ -278,6 +278,7 @@ impl ExtractFile {
                             .map(|p| conv(p))
                             .collect::<Result<Vec<_>, _>>()?,
                     },
+                    warnings: Vec::new(),
                 })
             })
             .collect()

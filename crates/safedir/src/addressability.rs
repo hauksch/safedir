@@ -240,6 +240,7 @@ mod tests {
                 )],
                 reader_cipher: vec![],
             },
+            warnings: Vec::new(),
         }
     }
 

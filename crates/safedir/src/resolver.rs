@@ -354,6 +354,9 @@ pub struct SearchOutcome {
     pub entries: Vec<SafeEntry>,
     /// Directory hints that belong to the result set (A5).
     pub notes: Vec<crate::error::ErrCode>,
+    /// Non-fatal diagnostics (skipped result objects, degraded parses) —
+    /// surfaced so nothing is ever dropped silently.
+    pub warnings: Vec<String>,
 }
 
 /// A source of SAFE directory data.

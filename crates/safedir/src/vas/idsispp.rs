@@ -50,9 +50,11 @@ pub fn parse_profile(pso_id: &str, profile_xml: &str) -> Result<SafeEntry, Error
         .map_err(|e| Error::Extract(format!("psoID is not a valid SAFE-ID: {e}")))?;
 
     let mut p = Prof::default();
+    let mut warnings: Vec<String> = Vec::new();
     let mut reader = Reader::from_str(profile_xml);
-    reader.config_mut().trim_text_start = true;
-    reader.config_mut().trim_text_end = true;
+    // No reader-level trimming: text events are split at entity references,
+    // and trimming each fragment would eat entity-adjacent whitespace.
+    // Leaves trim where they need it.
 
     let mut path: Vec<String> = Vec::new();
     let mut text = String::new();
@@ -81,17 +83,35 @@ pub fn parse_profile(pso_id: &str, profile_xml: &str) -> Result<SafeEntry, Error
                 // Self-closing elements carry no text and no children.
             }
             Event::Text(t) => {
-                text.push_str(&String::from_utf8_lossy(&t));
+                // quick-xml hands out escaped content; unescape to real
+                // text (entity-encoded umlauts, &amp;, …).
+                let raw = String::from_utf8_lossy(&t).into_owned();
+                let unescaped = match quick_xml::escape::unescape(&raw) {
+                    Ok(u) => u.into_owned(),
+                    Err(_) => raw,
+                };
+                text.push_str(&unescaped);
             }
             Event::CData(t) => {
                 text.push_str(&String::from_utf8_lossy(&t));
+            }
+            Event::GeneralRef(r) => {
+                let content = String::from_utf8_lossy(&r).into_owned();
+                text.push_str(&crate::vas::spml::resolve_reference(&content));
             }
             Event::End(_) => {
                 if let Some(local) = path.pop() {
                     if local == "MsgContact" {
                         contact_tech.pop();
                     }
-                    assign(&mut p, &path, &local, text.trim(), contact_tech.last());
+                    assign(
+                        &mut p,
+                        &path,
+                        &local,
+                        text.trim(),
+                        contact_tech.last(),
+                        &mut warnings,
+                    );
                 }
                 text.clear();
             }
@@ -135,10 +155,17 @@ pub fn parse_profile(pso_id: &str, profile_xml: &str) -> Result<SafeEntry, Error
         dienststellen_ids: p
             .external_ids
             .iter()
-            .filter_map(|s| s.parse().ok())
+            .filter_map(|s| match s.parse::<DienststellenId>() {
+                Ok(id) => Some(id),
+                Err(_) => {
+                    warnings.push(format!("unparseable Dienststellen-ID {s:?} ignored"));
+                    None
+                }
+            })
             .collect::<Vec<DienststellenId>>(),
         roles: p.roles.clone(),
         osci,
+        warnings,
     })
 }
 
@@ -167,7 +194,16 @@ struct Prof {
 
 /// Route a leaf by the last meaningful ancestors. `ancestors` excludes the
 /// leaf itself; `tech` is the innermost active `MsgContact` technology.
-fn assign(p: &mut Prof, ancestors: &[String], leaf: &str, text: &str, tech: Option<&String>) {
+/// Anything unusable (role tokens, certificates) records a warning instead
+/// of being dropped silently.
+fn assign(
+    p: &mut Prof,
+    ancestors: &[String],
+    leaf: &str,
+    text: &str,
+    tech: Option<&String>,
+    warnings: &mut Vec<String>,
+) {
     if text.is_empty() {
         return;
     }
@@ -208,13 +244,14 @@ fn assign(p: &mut Prof, ancestors: &[String], leaf: &str, text: &str, tech: Opti
         "ExternalID" if tail(1) == "EJusticeAttributes" => {
             p.external_ids.push(text.to_owned());
         }
-        "RoleValue" if tail(2) == "EJusticeAttributes/Roles" => {
-            if let Ok(role) = text.parse::<RoleValue>() {
+        "RoleValue" if tail(2) == "EJusticeAttributes/Roles" => match text.parse::<RoleValue>() {
+            Ok(role) => {
                 if !p.roles.contains(&role) {
                     p.roles.push(role);
                 }
             }
-        }
+            Err(_) => warnings.push(format!("unparseable role value {text:?} ignored")),
+        },
         // OSCI parameters only inside an osci12Postbox contact.
         "IntermedAddress" => {
             if tech.is_some_and(|t| t.contains(TECH_OSCI)) {
@@ -225,12 +262,13 @@ fn assign(p: &mut Prof, ancestors: &[String], leaf: &str, text: &str, tech: Opti
             if !tech.is_some_and(|t| t.contains(TECH_OSCI)) {
                 return;
             }
-            if let Some(cert) = cert_from_base64(text) {
-                match leaf {
+            match cert_from_base64(text) {
+                Some(cert) => match leaf {
                     "IntermedEncryptKey" => p.intermed_encrypt_key = Some(cert),
                     "RecipientEncryptKey" => p.recipient_encrypt_keys.push(cert),
                     _ => p.reader_encrypt_keys.push(cert),
-                }
+                },
+                None => warnings.push(format!("{leaf}: undecodable certificate ignored")),
             }
         }
         _ => {}

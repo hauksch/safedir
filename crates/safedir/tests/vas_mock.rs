@@ -201,6 +201,27 @@ fn typed_error_surfaced() {
 }
 
 #[test]
+fn entity_encoded_profile_text_maps_to_plain_strings() {
+    let inner = pso(
+        "DE.BRAK.bdda0cd6-ccdd-44a1-a42c-f13ced17235b.334d",
+        "M&#252;ller &amp; S&#246;hne",
+        "K&#246;ln",
+        "egvp_beA",
+    );
+    let mock = spawn_mock(vec![soap(&format!(
+        "<lookupResponse xmlns=\"urn:oasis:names:tc:SPML:2:0\" status=\"success\">{inner}</lookupResponse>"
+    ))]);
+    let dir = resolver(&mock.endpoint);
+    let id: SafeId = "DE.BRAK.bdda0cd6-ccdd-44a1-a42c-f13ced17235b.334d"
+        .parse()
+        .unwrap();
+    let entry = dir.lookup_safe_id(&id).unwrap().expect("entry");
+    assert_eq!(entry.name, "Müller & Söhne");
+    assert_eq!(entry.ort.as_deref(), Some("Köln"));
+    assert!(entry.warnings.is_empty());
+}
+
+#[test]
 fn search_encodes_query_and_maps_results() {
     let mock = spawn_mock(vec![search_success()]);
     let dir = resolver(&mock.endpoint);
