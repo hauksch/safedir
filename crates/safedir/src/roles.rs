@@ -145,10 +145,7 @@ impl FromStr for RoleValue {
         }
         // Unknown-but-well-formed tokens are preserved (forward
         // compatibility); structurally impossible ones are rejected.
-        if !t.is_empty()
-            && t.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-            && !t.contains("__")
-        {
+        if !t.is_empty() && t.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
             return Ok(Self::Other(t.to_owned()));
         }
         Err(Error::ParseRole(format!("unknown role value {t:?}")))
@@ -213,6 +210,8 @@ mod tests {
         let v: RoleValue = "egvp_zukunft_2030".parse().unwrap();
         assert_eq!(v.token(), "egvp_zukunft_2030");
         assert!(matches!(v, RoleValue::Other(_)));
+        // Double underscores are fine (no rule against them).
+        assert!("egvp_x__y".parse::<RoleValue>().is_ok());
         // Structurally impossible tokens are rejected.
         assert!("not a token!".parse::<RoleValue>().is_err());
         assert!("".parse::<RoleValue>().is_err());

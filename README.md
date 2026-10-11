@@ -54,8 +54,22 @@ safedir validate safe.json
 safedir addressable egvp_beA dienststellen:301125T
 ```
 
-Exit codes: `0` ok · `2` usage/config · `3` not found · `4` directory/extract
-issues · `5` internal.
+Exit codes: `0` ok · `2` usage/config/parse · `3` not found · `4` directory,
+extract, or network issues.
+
+With the `vas` feature (default in the CLI), `lookup` can go live instead of
+reading an extract:
+
+```sh
+safedir lookup DE.Justiz.… \
+    --vas-url https://vas.example/soap \
+    --vas-identity client.pem \   # mutual-TLS identity (key + cert)
+    --vas-ca vas-root.pem          # extra CA to trust, if needed
+```
+
+⚠ The VAS endpoint and its credentials are handed out via the BLK-AG
+IT-Standards registration procedure (`it-standards@justiz.de`) — the client
+is mock-tested only until you have them.
 
 ## The extract format (`safe.json`)
 

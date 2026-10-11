@@ -95,6 +95,7 @@ fn spawn_mock(responses: Vec<String>) -> MockVas {
                 Ok(s) => s,
                 Err(_) => return,
             };
+            let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(10)));
             let mut buf = Vec::new();
             let mut tmp = [0u8; 4096];
             // read headers
@@ -166,7 +167,14 @@ fn lookup_maps_entry_and_request_matches_standard_shape() {
     assert!(entry.osci.recipient_cipher[0].fingerprint.is_some());
     assert_eq!(entry.dienststellen_ids[0].as_str(), "301125T");
 
-    let body = mock.captured.lock().unwrap()[0].clone();
+    let body = mock
+        .captured
+        .lock()
+        .unwrap()
+        .first()
+        .expect("captured request body")
+        .clone();
+    assert!(!body.is_empty());
     assert!(body.contains("<S:Envelope"));
     assert!(body.contains("lookupRequest"));
     assert!(body.contains("urn:oasis:names:tc:SPML:2:0"));
@@ -183,7 +191,13 @@ fn lookup_dienststellen_uses_wire_prefix() {
         .lookup_dienststellen(&"301125T".parse().unwrap())
         .unwrap();
     assert!(!hits.is_empty());
-    let body = mock.captured.lock().unwrap()[0].clone();
+    let body = mock
+        .captured
+        .lock()
+        .unwrap()
+        .first()
+        .expect("captured request body")
+        .clone();
     assert!(body.contains("Dienststellen-ID:301125T"));
 }
 
@@ -222,6 +236,50 @@ fn entity_encoded_profile_text_maps_to_plain_strings() {
 }
 
 #[test]
+fn http_500_with_fault_body_surfaces_typed_code() {
+    // One-shot raw server answering 500 with a SOAP Fault.
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let handle = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut buf = Vec::new();
+        let mut tmp = [0u8; 4096];
+        loop {
+            match stream.read(&mut tmp) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    buf.extend_from_slice(&tmp[..n]);
+                    if buf.windows(4).any(|w| w == b"\r\n\r\n") && buf.len() > 200 {
+                        break;
+                    }
+                }
+            }
+        }
+        let fault = "<?xml version=\"1.0\"?>\
+<S:Envelope xmlns:S=\"http://schemas.xmlsoap.org/soap/envelope/\"><S:Body><S:Fault><faultcode>S:Server</faultcode><faultstring>ERR40 Die Anzahl der gefundenen Ergebnisse ist gr&#246;&#223;er als 100.</faultstring></S:Fault></S:Body></S:Envelope>";
+        let resp = format!(
+            "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/xml\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            fault.len(),
+            fault
+        );
+        let _ = stream.write_all(resp.as_bytes());
+        let _ = stream.flush();
+    });
+    let dir = safedir::vas::SpmlResolver::new(safedir::vas::SpmlConfig::new(format!(
+        "http://{addr}/vas"
+    )))
+    .unwrap();
+    let id: SafeId = "DE.BRAK.bdda0cd6-ccdd-44a1-a42c-f13ced17235b.334d"
+        .parse()
+        .unwrap();
+    match dir.lookup_safe_id(&id) {
+        Err(Error::Directory(ErrCode::Err40, _)) => {}
+        other => panic!("unexpected {other:?}"),
+    }
+    handle.join().unwrap();
+}
+
+#[test]
 fn search_encodes_query_and_maps_results() {
     let mock = spawn_mock(vec![search_success()]);
     let dir = resolver(&mock.endpoint);
@@ -235,7 +293,13 @@ fn search_encodes_query_and_maps_results() {
     assert_eq!(outcome.entries.len(), 2);
     assert!(outcome.entries.iter().any(|e| e.name == "Amtsgericht Bonn"));
 
-    let body = mock.captured.lock().unwrap()[0].clone();
+    let body = mock
+        .captured
+        .lock()
+        .unwrap()
+        .first()
+        .expect("captured request body")
+        .clone();
     assert!(body.contains("searchRequest"));
     assert!(body.contains("/AddressCard/Address/L"));
     assert!(body.contains("Bonn"));

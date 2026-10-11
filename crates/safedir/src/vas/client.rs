@@ -77,8 +77,22 @@ impl SpmlResolver {
     ///
     /// [`Error::Config`] for an invalid endpoint or unusable key material.
     pub fn new(config: SpmlConfig) -> Result<Self, Error> {
+        // TLS-only, with an explicit loopback escape hatch for the mock
+        // test server; redirects are never followed (a cross-host redirect
+        // would re-present the mutual-TLS identity to a third party).
+        let https_only = config
+            .endpoint
+            .strip_prefix("http://")
+            .is_none_or(|rest| rest.starts_with("127.0.0.1") || rest.starts_with("localhost"));
+        if !https_only {
+            return Err(Error::Config(format!(
+                "VAS endpoint must use https (loopback http allowed for tests): {}",
+                config.endpoint
+            )));
+        }
         let mut builder = reqwest::blocking::Client::builder()
             .timeout(config.timeout)
+            .redirect(reqwest::redirect::Policy::none())
             .user_agent(concat!("safedir/", env!("CARGO_PKG_VERSION")));
         if let Some(ca) = &config.ca_pem {
             let cert = reqwest::Certificate::from_pem(ca.as_bytes())
@@ -104,18 +118,38 @@ impl SpmlResolver {
             .body(request_xml.to_owned())
             .send()
             .map_err(|e| Error::Network(format!("VAS request failed: {e}")))?;
-        if !response.status().is_success() {
-            return Err(Error::Network(format!(
-                "VAS answered with HTTP {}",
-                response.status()
-            )));
-        }
+        let status = response.status();
         let body = response
             .text()
             .map_err(|e| Error::Network(format!("cannot read VAS response: {e}")))?;
+        if !status.is_success() {
+            // SOAP servers answer 500 with a Fault body that may still
+            // carry a typed ERR code — try to parse before giving up.
+            return match spml::parse_response(&body) {
+                Ok(SpmlResponse::Failure(Some(code), msg)) => Err(Error::Directory(code, msg)),
+                Ok(SpmlResponse::Failure(None, msg)) if !msg.trim().is_empty() => {
+                    Err(Error::DirectoryFailure(format!("HTTP {status}: {msg}")))
+                }
+                _ => Err(Error::Network(format!(
+                    "VAS answered with HTTP {status}: {}",
+                    truncate(&body, 300)
+                ))),
+            };
+        }
         spml::parse_response(&body)
     }
+}
 
+fn truncate(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_owned()
+    } else {
+        let cut: String = s.chars().take(max).collect();
+        format!("{cut}…")
+    }
+}
+
+impl SpmlResolver {
     fn into_outcome(response: SpmlResponse) -> Result<SearchOutcome, Error> {
         match response {
             SpmlResponse::Success(entries, warnings) => Ok(SearchOutcome {
@@ -186,5 +220,19 @@ impl SafeDirectory for SpmlResolver {
     fn search(&self, query: &SearchQuery) -> Result<SearchOutcome, Error> {
         let response = self.post(&spml::search_request(query))?;
         Self::into_outcome(response)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_plain_http_outside_loopback() {
+        let err = SpmlResolver::new(SpmlConfig::new("http://vas.example/soap")).unwrap_err();
+        assert!(err.to_string().contains("https"));
+        // Loopback http is allowed (mock tests).
+        assert!(SpmlResolver::new(SpmlConfig::new("http://127.0.0.1:9/soap")).is_ok());
+        assert!(SpmlResolver::new(SpmlConfig::new("https://vas.example/soap")).is_ok());
     }
 }

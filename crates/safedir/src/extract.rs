@@ -19,6 +19,7 @@ pub const FORMAT_VERSION: u8 = 1;
 
 /// The whole extract file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ExtractFile {
     /// Format marker, currently `1`.
     #[serde(rename = "$format")]
@@ -32,6 +33,7 @@ pub struct ExtractFile {
 
 /// One entry in extract form (all certificates as inline PEM).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ExtractEntry {
     /// SAFE-ID.
     pub safe_id: SafeId,
@@ -89,6 +91,7 @@ pub struct ExtractEntry {
 
 /// OSCI routing data in extract form.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ExtractOsci {
     /// Intermediary URL.
     pub intermediary_url: String,
@@ -178,6 +181,16 @@ impl ExtractFile {
                     message: "name must not be empty".into(),
                 });
             }
+            let mut seen_ds = std::collections::HashSet::new();
+            for ds in &e.dienststellen_ids {
+                if !seen_ds.insert(ds.as_str().to_ascii_lowercase()) {
+                    issues.push(Issue {
+                        entry: Some(i),
+                        field: "dienststellen_ids",
+                        message: format!("duplicate Dienststellen-ID {ds}"),
+                    });
+                }
+            }
             if e.roles.is_empty() {
                 issues.push(Issue {
                     entry: Some(i),
@@ -185,7 +198,7 @@ impl ExtractFile {
                     message: "no role values (entry would be inactive, ERR20)".into(),
                 });
             }
-            if !e.osci.intermediary_url.starts_with("http") {
+            if !is_http_url(&e.osci.intermediary_url) {
                 issues.push(Issue {
                     entry: Some(i),
                     field: "osci.intermediary_url",
@@ -240,9 +253,9 @@ impl ExtractFile {
             .into_iter()
             .enumerate()
             .map(|(i, e)| {
-                let conv = |pem: &str| {
+                let conv = |pem: &str, field: &str| {
                     CertRef::from_pem(pem)
-                        .map_err(|err| Error::Extract(format!("entry {i}: {err}")))
+                        .map_err(|err| Error::Extract(format!("entry {i}, {field}: {err}")))
                 };
                 Ok(SafeEntry {
                     safe_id: e.safe_id,
@@ -264,18 +277,23 @@ impl ExtractFile {
                     roles: e.roles,
                     osci: OsciEndpoint {
                         intermediary_url: e.osci.intermediary_url,
-                        intermediary_cipher: conv(&e.osci.intermediary_cipher_cert)?,
+                        intermediary_cipher: conv(
+                            &e.osci.intermediary_cipher_cert,
+                            "osci.intermediary_cipher_cert",
+                        )?,
                         recipient_cipher: e
                             .osci
                             .recipient_cipher_certs
                             .iter()
-                            .map(|p| conv(p))
+                            .enumerate()
+                            .map(|(k, p)| conv(p, &format!("osci.recipient_cipher_certs[{k}]")))
                             .collect::<Result<Vec<_>, _>>()?,
                         reader_cipher: e
                             .osci
                             .reader_cipher_certs
                             .iter()
-                            .map(|p| conv(p))
+                            .enumerate()
+                            .map(|(k, p)| conv(p, &format!("osci.reader_cipher_certs[{k}]")))
                             .collect::<Result<Vec<_>, _>>()?,
                     },
                     warnings: Vec::new(),
@@ -331,6 +349,23 @@ impl ExtractFile {
                 .collect(),
         }
     }
+
+    /// Set the provenance note (generator, date, …).
+    #[must_use]
+    pub fn with_provenance(mut self, provenance: impl Into<String>) -> Self {
+        self.provenance = Some(provenance.into());
+        self
+    }
+}
+
+fn is_http_url(s: &str) -> bool {
+    let lower = s.to_ascii_lowercase();
+    let after_scheme = lower
+        .strip_prefix("https://")
+        .or_else(|| lower.strip_prefix("http://"))
+        .unwrap_or("");
+    let host = after_scheme.split(['/', '?', '#']).next().unwrap_or("");
+    !host.is_empty() && host.contains('.') | host.contains(':') | (host == "localhost")
 }
 
 #[cfg(test)]

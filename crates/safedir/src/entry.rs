@@ -83,6 +83,10 @@ impl CertRef {
         })
     }
 
+    /// **Serde note:** `fingerprint`/`not_before`/`not_after` are trusted
+    /// as stored when deserializing; only `CertRef::from_pem` derives
+    /// them.
+    ///
     /// DER bytes, decoded on demand.
     #[must_use]
     pub fn der(&self) -> Option<Vec<u8>> {
@@ -100,8 +104,9 @@ impl CertRef {
     }
 
     /// Test-only constructor with an explicit validity window.
+    #[cfg(test)]
     #[doc(hidden)]
-    pub fn __test_with_validity(pem: &str, not_before: i64, not_after: i64) -> Self {
+    pub(crate) fn __test_with_validity(pem: &str, not_before: i64, not_after: i64) -> Self {
         Self {
             pem: pem.to_owned(),
             fingerprint: inspect_pem(pem).ok().map(|(f, _, _)| f),

@@ -18,15 +18,44 @@ pub struct ExtractResolver {
 }
 
 impl ExtractResolver {
-    /// Load from a path.
+    /// Load from a path, **strictly**: the extract is validated first
+    /// (duplicates, roles, URLs, cert parseability) and any issue is an
+    /// error. See [`ExtractResolver::from_path_lenient`] to skip the
+    /// lint.
     ///
     /// # Errors
     ///
     /// [`Error::Config`] when unreadable, [`Error::Extract`] when
-    /// malformed or an entry fails to convert.
+    /// malformed, validation fails, or an entry fails to convert.
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, Error> {
+        Self::load(path, true)
+    }
+
+    /// Load from a path without running [`ExtractFile::validate`].
+    ///
+    /// # Errors
+    ///
+    /// See [`ExtractResolver::from_path`].
+    pub fn from_path_lenient(path: impl AsRef<Path>) -> Result<Self, Error> {
+        Self::load(path, false)
+    }
+
+    fn load(path: impl AsRef<Path>, strict: bool) -> Result<Self, Error> {
         let path = path.as_ref();
         let file = ExtractFile::from_path(path)?;
+        if strict {
+            let issues = file.validate();
+            if let Some(first) = issues.first() {
+                return Err(Error::Extract(format!(
+                    "{}: entry {:?}, field {}: {} ({} issues in total)",
+                    path.display(),
+                    first.entry,
+                    first.field,
+                    first.message,
+                    issues.len()
+                )));
+            }
+        }
         Ok(Self {
             path: Some(path.to_path_buf()),
             inner: crate::backends::InMemoryResolver::from_entries(file.into_entries()?),
