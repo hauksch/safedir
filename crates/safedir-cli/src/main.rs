@@ -1,7 +1,7 @@
 //! `safedir` — resolve German justice ERV recipients by SAFE-ID.
 //!
-//! Exit codes: `0` ok · `2` usage/config · `3` not found · `4` directory or
-//! extract issues · `5` internal.
+//! Exit codes: `0` ok · `2` usage/config/parse · `3` not found · `4`
+//! directory, extract, or network issues.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
