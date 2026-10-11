@@ -69,6 +69,10 @@ pub enum Reason {
     /// All known encryption certificates expired at the reference time
     /// (the directories would silently hide such entries, A9).
     CertsExpired,
+    /// Certificates exist but are not yet valid.
+    CertsNotYetValid,
+    /// No recipient or reader certificates — unencryptable.
+    NoCerts,
 }
 
 impl core::fmt::Display for Reason {
@@ -87,6 +91,8 @@ impl core::fmt::Display for Reason {
             Self::Inactive => write!(f, "postbox is inactive (no role values, ERR20)"),
             Self::CertificateChange => write!(f, "postbox is shielded for certificate changeover"),
             Self::CertsExpired => write!(f, "all known encryption certificates expired"),
+            Self::CertsNotYetValid => write!(f, "certificates not yet valid"),
+            Self::NoCerts => write!(f, "no encryption certificates"),
         }
     }
 }
@@ -95,10 +101,26 @@ impl core::fmt::Display for Reason {
 /// Note: `egvp_test` is deliberately absent from every list except its own.
 fn allowed_receivers(sender: &RoleValue) -> &'static [RoleValue] {
     use RoleValue::*;
+    // Decoded from the §5.3 table (Anforderungspapier p. 19, layout-aware
+    // extraction, cross-checked against the per-role prose; see research
+    // report §3.5). Rows = sender, columns = addressable receiver.
     match sender {
-        // Justiz and (legacy) Behörden address everyone except test
-        // postboxes.
-        EgvpJustiz | EgvpBehoerde => &[
+        // Everyone except test; only justiz also reaches zuzu.
+        EgvpJustiz => &[
+            EgvpJustiz,
+            EgvpBehoerde,
+            EgvpBea,
+            EgvpBen,
+            EgvpBest,
+            EgvpBebpo,
+            EgvpEbo,
+            OzgPostfach,
+            EgvpBuerger,
+            BuergerHin,
+            BuergerRueck,
+            Zuzu,
+        ],
+        EgvpBehoerde => &[
             EgvpJustiz,
             EgvpBehoerde,
             EgvpBea,
@@ -111,8 +133,8 @@ fn allowed_receivers(sender: &RoleValue) -> &'static [RoleValue] {
             BuergerHin,
             BuergerRueck,
         ],
-        // Besondere Postfächer: each other, justice/authorities, eBO, MJP.
-        EgvpBea | EgvpBen | EgvpBest | EgvpBebpo => &[
+        // Gerichtsvollzieher: everything except test.
+        BuergerHin | BuergerRueck => &[
             EgvpJustiz,
             EgvpBehoerde,
             EgvpBea,
@@ -121,26 +143,56 @@ fn allowed_receivers(sender: &RoleValue) -> &'static [RoleValue] {
             EgvpBebpo,
             EgvpEbo,
             OzgPostfach,
+            EgvpBuerger,
+            BuergerHin,
+            BuergerRueck,
+            Zuzu,
         ],
-        // eBO and MJP: justice/authorities + besondere Postfächer only.
-        // eBO→eBO is handled as Conditional, MJP neither eBO nor MJP.
-        EgvpEbo | OzgPostfach => &[
+        // Besondere Postfächer: authorities + GV + each other + eBO + MJP
+        // (not egvp_buerger, not zuzu). beBPo additionally reaches
+        // egvp_buerger.
+        EgvpBea | EgvpBen | EgvpBest => &[
             EgvpJustiz,
             EgvpBehoerde,
             EgvpBea,
             EgvpBen,
             EgvpBest,
             EgvpBebpo,
+            EgvpEbo,
+            OzgPostfach,
+            BuergerHin,
+            BuergerRueck,
+        ],
+        EgvpBebpo => &[
+            EgvpJustiz,
+            EgvpBehoerde,
+            EgvpBea,
+            EgvpBen,
+            EgvpBest,
+            EgvpBebpo,
+            EgvpEbo,
+            OzgPostfach,
+            EgvpBuerger,
+            BuergerHin,
+            BuergerRueck,
+        ],
+        // eBO and MJP: besondere Postfächer + justiz + the GV reply
+        // channel (buerger_rueck); NOT behoerde, buerger, each other.
+        // eBO→eBO is surfaced as Conditional (eBO-plus), MJP has none.
+        EgvpEbo | OzgPostfach => &[
+            EgvpJustiz,
+            EgvpBea,
+            EgvpBen,
+            EgvpBest,
+            EgvpBebpo,
+            BuergerRueck,
         ],
         // egvp_buerger: authorities (incl. beBPo) and reply-capable GV.
         EgvpBuerger => &[EgvpJustiz, EgvpBehoerde, EgvpBebpo, BuergerRueck],
-        // Gerichtsvollzieher: authorities plus citizen postboxes
-        // ("Bürgerpostfächer" = eBO + egvp_buerger; not MJP).
-        BuergerHin | BuergerRueck => &[EgvpJustiz, EgvpBehoerde, EgvpBebpo, EgvpBuerger, EgvpEbo],
         // Test sees only test.
         EgvpTest => &[EgvpTest],
         // Shield state, the additive zuzu consent, and unknown role values
-        // grant no visibility (conservative).
+        // grant no visibility (conservative; zuzu has no row in §5.3).
         Zertifikatswechsel | Zuzu | Other(_) => &[],
     }
 }
@@ -166,6 +218,10 @@ pub fn addressability(
         EntryState::CertsExpired => {
             return Addressability::NotAddressable(Reason::CertsExpired);
         }
+        EntryState::CertsNotYetValid => {
+            return Addressability::NotAddressable(Reason::CertsNotYetValid);
+        }
+        EntryState::NoCerts => return Addressability::NotAddressable(Reason::NoCerts),
         EntryState::Active | EntryState::CertsUnknown => {}
     }
 
@@ -251,7 +307,9 @@ mod tests {
     #[test]
     fn matrix_cases() {
         let cases: &[(R, R, bool)] = &[
-            // beA addresses everyone relevant, is addressed by everyone.
+            // Transcribed from the layout-decoded §5.3 table (verified
+            // 2026-10-11, see research report §3.5).
+            // beA addresses everyone relevant incl. GV, is addressed by all.
             (R::EgvpBea, R::EgvpJustiz, true),
             (R::EgvpBea, R::EgvpBea, true),
             (R::EgvpBea, R::EgvpBen, true),
@@ -260,23 +318,44 @@ mod tests {
             (R::EgvpBea, R::EgvpEbo, true),
             (R::EgvpBea, R::OzgPostfach, true),
             (R::EgvpBea, R::EgvpBehoerde, true),
-            // Justiz addresses everyone incl. citizens.
+            (R::EgvpBea, R::BuergerHin, true),
+            (R::EgvpBea, R::BuergerRueck, true),
+            (R::EgvpBea, R::EgvpBuerger, false),
+            (R::EgvpBea, R::Zuzu, false),
+            // Justiz and (legacy) Behörden: everything except test; only
+            // justiz also reaches zuzu.
             (R::EgvpJustiz, R::EgvpEbo, true),
             (R::EgvpJustiz, R::OzgPostfach, true),
             (R::EgvpJustiz, R::EgvpBuerger, true),
             (R::EgvpJustiz, R::EgvpJustiz, true),
             (R::EgvpJustiz, R::BuergerRueck, true),
-            // eBO: justice + besondere only.
+            (R::EgvpJustiz, R::Zuzu, true),
+            (R::EgvpJustiz, R::EgvpTest, false),
+            (R::EgvpBehoerde, R::EgvpBuerger, true),
+            (R::EgvpBehoerde, R::Zuzu, false),
+            // Gerichtsvollzieher: everything except test.
+            (R::BuergerHin, R::EgvpBuerger, true),
+            (R::BuergerHin, R::EgvpBea, true),
+            (R::BuergerRueck, R::EgvpEbo, true),
+            (R::BuergerRueck, R::EgvpBea, true),
+            (R::BuergerRueck, R::OzgPostfach, true),
+            (R::BuergerRueck, R::Zuzu, true),
+            (R::BuergerRueck, R::BuergerHin, true),
+            (R::BuergerRueck, R::EgvpTest, false),
+            // eBO/MJP: besondere + justiz + buerger_rueck only.
             (R::EgvpEbo, R::EgvpJustiz, true),
             (R::EgvpEbo, R::EgvpBea, true),
             (R::EgvpEbo, R::EgvpBebpo, true),
+            (R::EgvpEbo, R::BuergerRueck, true),
+            (R::EgvpEbo, R::EgvpBehoerde, false),
             (R::EgvpEbo, R::EgvpBuerger, false),
             (R::EgvpEbo, R::OzgPostfach, false),
-            // MJP: like eBO, but never eBO.
             (R::OzgPostfach, R::EgvpJustiz, true),
             (R::OzgPostfach, R::EgvpBea, true),
+            (R::OzgPostfach, R::BuergerRueck, true),
             (R::OzgPostfach, R::EgvpEbo, false),
             (R::OzgPostfach, R::OzgPostfach, false),
+            (R::OzgPostfach, R::EgvpBehoerde, false),
             // egvp_buerger: authorities + reply-capable GV only.
             (R::EgvpBuerger, R::EgvpJustiz, true),
             (R::EgvpBuerger, R::EgvpBebpo, true),
@@ -284,14 +363,13 @@ mod tests {
             (R::EgvpBuerger, R::BuergerHin, false),
             (R::EgvpBuerger, R::EgvpBea, false),
             (R::EgvpBuerger, R::EgvpBuerger, false),
-            // Gerichtsvollzieher reach citizen postboxes.
-            (R::BuergerHin, R::EgvpBuerger, true),
-            (R::BuergerRueck, R::EgvpEbo, true),
-            (R::BuergerRueck, R::EgvpBea, false),
+            // beBPo: besondere set plus egvp_buerger.
+            (R::EgvpBebpo, R::EgvpBuerger, true),
+            (R::EgvpBebpo, R::BuergerHin, true),
+            (R::EgvpBebpo, R::Zuzu, false),
             // Test only among itself.
             (R::EgvpTest, R::EgvpTest, true),
             (R::EgvpTest, R::EgvpJustiz, false),
-            (R::EgvpJustiz, R::EgvpTest, false),
             // beN/beSt behave like beA.
             (R::EgvpBen, R::EgvpEbo, true),
             (R::EgvpBest, R::OzgPostfach, true),
@@ -354,6 +432,26 @@ mod tests {
         assert!(matches!(
             addressability(&[R::EgvpJustiz], &inactive, NOW),
             Addressability::NotAddressable(Reason::Inactive)
+        ));
+    }
+
+    #[test]
+    fn exotic_senders_and_receivers_are_conservative() {
+        let justiz_entry = mk(&[R::EgvpJustiz]);
+        // zuzu (additive consent) and unknown roles grant no visibility.
+        assert!(matches!(
+            addressability(&[R::Zuzu], &justiz_entry, NOW),
+            Addressability::NotAddressable(_)
+        ));
+        assert!(matches!(
+            addressability(&[R::Other("egvp_future".into())], &justiz_entry, NOW),
+            Addressability::NotAddressable(_)
+        ));
+        // A receiver carrying only an unknown role is not addressable.
+        let other_entry = mk(&[R::Other("egvp_future".into())]);
+        assert!(matches!(
+            addressability(&[R::EgvpJustiz], &other_entry, NOW),
+            Addressability::NotAddressable(_)
         ));
     }
 

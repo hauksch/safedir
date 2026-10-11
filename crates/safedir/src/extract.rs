@@ -164,7 +164,7 @@ impl ExtractFile {
         let mut issues = Vec::new();
         let mut seen_ids = std::collections::HashSet::new();
         for (i, e) in self.entries.iter().enumerate() {
-            if !seen_ids.insert(e.safe_id.as_str().to_owned()) {
+            if !seen_ids.insert(e.safe_id.as_str().to_ascii_lowercase()) {
                 issues.push(Issue {
                     entry: Some(i),
                     field: "safe_id",

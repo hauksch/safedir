@@ -140,6 +140,15 @@ Source: *„Standard für die Suche in den SAFE-Verzeichnissen der ERV-Kommunika
 
 ### 3.5 Roles and the visibility matrix
 
+> **Verified 2026-10-11** by layout-aware extraction of the §5.3 table
+> (Anforderungspapier p. 19; rows = sender "sieht →", cross-validated
+> against the per-role prose): `buerger` → behoerde/bebpo/justiz/rueck ·
+> `behoerde` → all except zuzu/test · `buerger_hin`/`buerger_rueck` → all
+> except test · `bea`/`ben`/`beSt` → behoerde/hin/rueck/bea/ben/beSt/bebpo/
+> ebo/ozg/justiz · `bebpo` → same plus buerger · `ebo`/`ozg_postfach` →
+> rueck/bea/ben/beSt/bebpo/justiz · `justiz` → all except test · `test` →
+> test only · `zuzu` → nothing (additive consent flag, no own row).
+
 From the third-party requirements paper (§ 5.3, v1.8) — general role values:
 
 `egvp_justiz`, `egvp_bea`, `egvp_ben`, `egvp_best`, `egvp_bebpo`, `egvp_ebo`, `ozg_postfach` (MJP/OZG account), `egvp_buerger` (non-secure-path participants), `egvp_behoerde` (legacy), `buerger_hin` / `buerger_rueck` (Gerichtsvollzieher: can address citizen postboxes with/without receiving replies), `zuzu` (eBO organizations consenting to general service of documents per § 173 Abs. 4 S. 3 ZPOZustZustG), `egvp_test` (test postboxes visible **only among themselves**).

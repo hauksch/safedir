@@ -37,6 +37,9 @@ use std::str::FromStr;
 
 use crate::error::ParseSafeIdError;
 
+/// Hard cap on accepted ID length; real SAFE-IDs are ≤ ~60 characters.
+pub(crate) const MAX_ID_LEN: usize = 120;
+
 /// The SAFE domain (Verzeichnisdienst) an identity belongs to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -111,7 +114,10 @@ pub struct SafeId {
 }
 
 impl SafeId {
-    /// The ID exactly as supplied.
+    /// The ID as supplied (surrounding whitespace trimmed at parse time).
+    ///
+    /// Equality is raw-string exact: case variants of one logical identity
+    /// are distinct values, though lookups compare case-insensitively.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.raw
@@ -158,6 +164,9 @@ impl SafeId {
             return Err(ParseSafeIdError::BadUuid);
         }
         let uuid = uuid.to_ascii_lowercase();
+        // Canonicalize/reject Other domains so compose() output always
+        // re-parses to an equal value.
+        let domain = canonical_domain(domain)?;
         let domain_seg = domain.as_segment();
         let body = format!("DE.{domain_seg}.{uuid}");
         let [a, b] = Self::checksum_of_body(&body);
@@ -190,9 +199,13 @@ impl FromStr for SafeId {
         if raw.chars().any(char::is_whitespace) {
             return Err(ParseSafeIdError::Whitespace);
         }
-        // Distinguishing rule: the modern format starts with "DE." and has
-        // exactly three dots; legacy IDs contain none.
-        if raw.starts_with("DE.") || raw.starts_with("de.") {
+        if raw.len() > MAX_ID_LEN {
+            return Err(ParseSafeIdError::TooLong { limit: MAX_ID_LEN });
+        }
+        // Distinguishing rule: the modern format starts with a case-
+        // insensitive "DE." prefix; legacy IDs contain no dots.
+        let modern = raw.len() >= 3 && raw[..3].eq_ignore_ascii_case("DE.");
+        if modern {
             parse_modern(raw)
         } else {
             parse_legacy(raw)
@@ -241,12 +254,18 @@ fn parse_modern(raw: &str) -> Result<SafeId, ParseSafeIdError> {
             found: checksum.to_owned(),
         });
     }
-    let domain = match domain_seg {
-        "BRAK" => Domain::Brak,
-        "BEN_PROD" => Domain::BenProd,
-        "BNotK_Produktiv" => Domain::BNotkProduktiv,
-        "Justiz" => Domain::Justiz,
-        _ => Domain::Other(domain_seg.to_owned()),
+    // Classify case-insensitively so `de.brak.…` still routes to the BRAK
+    // directory instead of `Other`/`Unknown`.
+    let domain = if domain_seg.eq_ignore_ascii_case("BRAK") {
+        Domain::Brak
+    } else if domain_seg.eq_ignore_ascii_case("BEN_PROD") {
+        Domain::BenProd
+    } else if domain_seg.eq_ignore_ascii_case("BNotK_Produktiv") {
+        Domain::BNotkProduktiv
+    } else if domain_seg.eq_ignore_ascii_case("Justiz") {
+        Domain::Justiz
+    } else {
+        Domain::Other(domain_seg.to_owned())
     };
     // Check digits are computed over the lowercased body (domain included).
     let body = format!("DE.{domain_seg}.{uuid}");
@@ -282,6 +301,15 @@ fn parse_legacy(raw: &str) -> Result<SafeId, ParseSafeIdError> {
             found: prefix.to_owned(),
         });
     }
+    // Middle segments (if any) must be non-empty alphanumeric — no empty
+    // segments, no control characters.
+    for seg in &parts[1..parts.len() - 2] {
+        if seg.is_empty() || !seg.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return Err(ParseSafeIdError::LegacyShape {
+                found: raw.to_owned(),
+            });
+        }
+    }
     // The last two segments must be numeric (epoch millis, sequence).
     for seg in &parts[parts.len() - 2..] {
         if seg.is_empty() || !seg.chars().all(|c| c.is_ascii_digit()) {
@@ -300,6 +328,27 @@ fn parse_legacy(raw: &str) -> Result<SafeId, ParseSafeIdError> {
 
 fn is_domain_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
+}
+
+/// Map an `Other` domain that merely re-spells a known one onto the known
+/// variant; reject structurally impossible ones.
+fn canonical_domain(domain: &Domain) -> Result<Domain, ParseSafeIdError> {
+    if let Domain::Other(seg) = domain {
+        for known in [
+            Domain::Brak,
+            Domain::BenProd,
+            Domain::BNotkProduktiv,
+            Domain::Justiz,
+        ] {
+            if seg.eq_ignore_ascii_case(known.as_segment()) {
+                return Ok(known);
+            }
+        }
+        if seg.is_empty() || seg.len() > 64 || !seg.chars().all(is_domain_char) {
+            return Err(ParseSafeIdError::BadDomain { found: seg.clone() });
+        }
+    }
+    Ok(domain.clone())
 }
 
 fn is_valid_uuid(s: &str) -> bool {
@@ -415,6 +464,61 @@ mod tests {
             other => panic!("unexpected {:?}", other),
         }
     }
+
+    #[test]
+    fn case_variants_classify_into_known_directories() {
+        for (raw, expected) in [
+            (
+                "de.brak.bdda0cd6-ccdd-44a1-a42c-f13ced17235b.334d",
+                Domain::Brak,
+            ),
+            (
+                "DE.brak.bdda0cd6-ccdd-44a1-a42c-f13ced17235b.334d",
+                Domain::Brak,
+            ),
+            (
+                "DE.JUSTIZ.dbf3d18a-5c6e-4a0b-9f1e-2a7c8e4d1b30.10dd",
+                Domain::Justiz,
+            ),
+        ] {
+            let id: SafeId = raw.parse().unwrap_or_else(|e| panic!("{raw}: {e}"));
+            assert_eq!(id.domain(), Some(&expected), "{raw}");
+        }
+    }
+
+    #[test]
+    fn legacy_rejects_garbage_middles() {
+        assert!("safe--123-456".parse::<SafeId>().is_err());
+        assert!("safe-a$b-123-456".parse::<SafeId>().is_err());
+        // Valid extra middle segment still accepted.
+        assert!(
+            "safe-sp1-x1-1357225160794-021568182"
+                .parse::<SafeId>()
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn rejects_oversized_input() {
+        let huge = format!("{}{}", "a".repeat(200), "-123-456");
+        assert!(matches!(
+            huge.parse::<SafeId>(),
+            Err(ParseSafeIdError::TooLong { limit: 120 })
+        ));
+    }
+
+    #[test]
+    fn compose_validates_other_domains() {
+        assert!(SafeId::compose(&Domain::Other("".into()), UUID).is_err());
+        assert!(SafeId::compose(&Domain::Other("BA D".into()), UUID).is_err());
+        assert!(SafeId::compose(&Domain::Other("a.b".into()), UUID).is_err());
+        // Re-spelling of a known domain canonicalizes.
+        let id = SafeId::compose(&Domain::Other("brak".into()), UUID).unwrap();
+        assert_eq!(id.domain(), Some(&Domain::Brak));
+        assert_eq!(id.as_str().parse::<SafeId>().unwrap(), id);
+    }
+
+    const UUID: &str = "bdda0cd6-ccdd-44a1-a42c-f13ced17235b";
 
     #[test]
     fn serde_round_trip() {
