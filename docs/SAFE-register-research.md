@@ -1,7 +1,7 @@
 # The German SAFE Register, EGVP, OSCI and XJustiz — Research Report
 
 **Purpose:** groundwork for a Rust library that finds and resolves ERV (elektronischer Rechtsverkehr) recipients by SAFE-ID.
-**Date of research:** 10 October 2026. All facts were verified against primary sources during research; source URLs are given inline. Local copies of the most important specifications are in [`docs/specs/`](specs/).
+**Date of research:** 10 October 2026. All facts were verified against primary sources during research; source URLs are given inline. Canonical download locations for all specifications are collected in [`SPECIFICATIONS.md`](SPECIFICATIONS.md).
 
 > **Terminology warning up front:** "SAFE" is *not* a single central register run by one company. It is a **federation of four directory services** (Justiz, BRAK, BNotK, BStBK) searched through a central hub called the **VAS (Virtueller Attribut-Service)**. The former public web search at `www.safe-register.de` **no longer exists** — the domain does not resolve any more. Searching is a function *inside* the licensed/participating ERV client software.
 
@@ -58,7 +58,7 @@ Sources: [egvp.justiz.de](https://egvp.justiz.de/), Wikipedia articles on beA/be
 - **§ 130d ZPO** (+ § 14b FamFG etc.): since 1 Jan 2022 lawyers, authorities and jPöR **must** file electronically.
 - **Secure paths** per § 130a Abs. 4 Nr. 1–5 ZPO: beA, beN, beSt, beBPo, eBO, and the Postfach-/Versanddienst eines OZG-Nutzerkontos (MJP).
 - **ERVV** — *Verordnung über die technischen Rahmenbedingungen des elektronischen Rechtsverkehrs und über das besondere elektronische Behördenpostfach*, **24 Nov 2017, BGBl. I S. 3803** (BJNR 380300017), last amended 5 Oct 2021. Key sections: § 2 (document/metadata requirements), § 4 (qeS rules; **container signatures prohibited**, Abs. 2), §§ 6–9 (beBPo incl. Prüfstelle), §§ 10–13 (eBO, identification, **MJP**), §§ 14–15 (criminal), §§ 16–17 (notary/court genehmigungsverfahren). <https://www.gesetze-im-internet.de/ervv/>
-- **ERVB** — the BMJ bulletin under § 5 ERVV fixing concrete technical parameters. Current: **ERVB 2025** (16 Jul 2025, BAnz AT 29.07.2025 B2, in force 30 Jul 2025). Published at <https://justiz.de/laender-bund-europa/elektronische_kommunikation/index.php> (local copy: `docs/specs/ervb2025.pdf`).
+- **ERVB** — the BMJ bulletin under § 5 ERVV fixing concrete technical parameters. Current: **ERVB 2025** (16 Jul 2025, BAnz AT 29.07.2025 B2, in force 30 Jul 2025). Published at <https://justiz.de/laender-bund-europa/elektronische_kommunikation/index.php> (source: ervb2025.pdf`).
 - **ERV-Ausbaugesetz** (17 Sep 2021), **BehAktÜbVO** (Behördenaktenübermittlung, since 30 Apr 2025), RAVPV §§ 19–29 (beA), § 31a BRAO (BRAK must provision a beA per lawyer).
 - A separate "E-Rechtsverkehrs-Gesetz (ERVG)" does **not** exist on gesetze-im-internet.de as of Oct 2026 (checked; `/ervg/` returns 404). Current law = ERVV + ERVB.
 
@@ -92,7 +92,7 @@ Administration model (from the BNotK "SAFE Identitätsadministration" guide v1.4
 
 ### 3.3 The SAFE-ID
 
-From *„SAFE-ID — Abbildungsvorschrift, Stand Juli 2017"* (local copy `docs/specs/SAFE_Abbildungsvorschrift_SAFE_ID_V2.pdf`):
+From *„SAFE-ID — Abbildungsvorschrift, Stand Juli 2017"* (source: SAFE_Abbildungsvorschrift_SAFE_ID_V2.pdf`):
 
 - Every identity in a SAFE-conformant IdM system gets a **unique, immutable** SAFE-ID.
 - **Current format:** `DE.<Domain>.<UUID>.<checkdigits>`
@@ -107,7 +107,7 @@ From *„SAFE-ID — Abbildungsvorschrift, Stand Juli 2017"* (local copy `docs/s
 
 ### 3.4 The directory search standard (VAS, SPML, search/lookup)
 
-Source: *„Standard für die Suche in den SAFE-Verzeichnissen der ERV-Kommunikationsinfrastruktur"*, **v1.5, 21 May 2026** (history: v1.0 24 Nov 2025 final → v1.5 May 2026), by BLK-AG IT-Standards, agreed with BRAK/BNotK/BStBK. Local copy: `docs/specs/Standard_SAFE_Verzeichnisdienst.pdf`. Key content:
+Source: *„Standard für die Suche in den SAFE-Verzeichnissen der ERV-Kommunikationsinfrastruktur"*, **v1.5, 21 May 2026** (history: v1.0 24 Nov 2025 final → v1.5 May 2026), by BLK-AG IT-Standards, agreed with BRAK/BNotK/BStBK. Source: see [`SPECIFICATIONS.md`](SPECIFICATIONS.md). Key content:
 
 - Scope: **only** the `search` and `lookup` interfaces; provisioning (identity creation) is governed by each directory operator separately.
 - **Protocol:** SOAP with OASIS **SPML 2.0** (`urn:oasis:names:tc:SPML:2:0`, `…:search`, `…:suspend` etc.) and Liberty ID-SIS-PP person-profile namespaces (`urn:liberty:id-sis-pp:200505`), extended by SAFE/FIM namespaces `urn:de:egov:names:safe:1.0:*` (e.g. `…:search:orderby`, `…:spmlCapabilityData`, `…:id-sispp:extension`, `…:iterate:navigate`) and beA (`urn:de:egov:names:bea:1.0:id-sispp:extension`). The example lookup request is a `lookupRequest` with `executionMode="synchronous"` and a `psoID` element.
@@ -182,7 +182,7 @@ Communication rules (ERV-Leitfaden 4.2): beA/beN/beSt/beBPo can address everyone
 
 ### 5.1 OSCI-Transport basics
 
-- OSCI (Online Services Computer Interface) was developed by **bremen online services (bos)** in the Media@Komm era; the OSCI-Leitstelle became **KoSIT** on 1 Apr 2011 (KoSIT sits in the Bremen state administration; see <https://www.osci.de/>). The current KoSIT website only presents the XÖV standards family, but the **OSCI-Transport 1.2 specification is freely downloadable** (no registration, no cost) from the **OSCI/XÖV-Bezugsstelle at ITZBund**: <https://www.itzbund.de/DE/itloesungen/standardloesungen/xoev/oscixoevbezugsstelle/oscixoevbezugsstelle.html>. Available there: base spec (Fassung 2002-06-06, 75 pp.), Korrigenda 1–7 (2020-12-15), 8 (2024-01-12), 9 (2025-05-26), **10 (2026-02-13 — i.e. actively maintained)**, and the supplement "Effiziente Übertragung großer Datenmengen" (2017-10-25). Alternatives: paid CD-ROM order, and deposit at the Bundesarchiv Koblenz. Local copies in `docs/specs/`.
+- OSCI (Online Services Computer Interface) was developed by **bremen online services (bos)** in the Media@Komm era; the OSCI-Leitstelle became **KoSIT** on 1 Apr 2011 (KoSIT sits in the Bremen state administration; see <https://www.osci.de/>). The current KoSIT website only presents the XÖV standards family, but the **OSCI-Transport 1.2 specification is freely downloadable** (no registration, no cost) from the **OSCI/XÖV-Bezugsstelle at ITZBund**: <https://www.itzbund.de/DE/itloesungen/standardloesungen/xoev/oscixoevbezugsstelle/oscixoevbezugsstelle.html>. Available there: base spec (Fassung 2002-06-06, 75 pp.), Korrigenda 1–7 (2020-12-15), 8 (2024-01-12), 9 (2025-05-26), **10 (2026-02-13 — i.e. actively maintained)**, and the supplement "Effiziente Übertragung großer Datenmengen" (2017-10-25). Alternatives: paid CD-ROM order, and deposit at the Bundesarchiv Koblenz.
 - **Spec licensing (verbatim from the base spec, p. 2):** the specification is copyright-protected, all usage rights rest with the Herausgeber (OSCI-Leitstelle/KoSIT), *but* — "Herstellern wird zur Implementation von Bürger-, Kommunal-, Intermediär- oder Dienstleistersystemen **unentgeltlich ein einfaches Nutzungsrecht eingeräumt**" — implementers of such systems are granted a **free, simple (non-exclusive) usage right**. Distribution in unmodified form is permitted within that purpose; modifications/translations require consultation with the Herausgeber. An independent Rust implementation is therefore squarely within the granted licence. (Note: only OSCI-Transport **1.2** is on the ITZBund list; the newer OSCI-Transport 2.0 is not offered there — its availability would have to be clarified separately, but EGVP uses 1.2 anyway.)
 - EGVP uses **OSCI-Transport 1.2** (requirement: "Der Versand und Empfang von Nachrichten muss gemäß dem Transportprotokollstandard OSCI-1.2 erfolgen" — Drittprodukte requirements § 3.1).
 - **Store-and-forward via intermediaries (OSCI-Manager/Intermediär):** each postbox holder is reachable at the URL of *their* intermediary; the sender uploads to the recipient's intermediary, the recipient polls. Intermediaries create the **MessageID**, verify required elements, log everything on **Laufzettel** (process sheets), check certificates, and store messages in the recipient's OSCI account.
@@ -220,7 +220,7 @@ ContentDataOSCI
 
 ### 5.4 The VHN (Vertrauenswürdiger Herkunftsnachweis)
 
-Spec: *„Vertrauenswürdiger Herkunftsnachweis (VHN) 2 — Spezifikation, Version 2.2, 09.12.2021"* (local copy `docs/specs/VHN_2_2_Spezifikation.zip` incl. `vhn.xsd` + example `vhn.xml`).
+Spec: *„Vertrauenswürdiger Herkunftsnachweis (VHN) 2 — Spezifikation, Version 2.2, 09.12.2021"* (source: VHN_2_2_Spezifikation.zip` incl. `vhn.xsd` + example `vhn.xml`).
 
 - Purpose: machine-verifiable proof that a message originated from an *identified* postbox over a secure path; also anti-DoS (messages without VHN 2 can be auto-rejected).
 - `vhn.xml` = **Fachlich** (Absender-Visitenkarte: `Nutzer_ID` (the SAFE-ID!), title/name/address/org/Berufstraegereigenschaft/`Externe_ID`; `EGVP_Rollenwerte` (1..n); `Sicherer_Uebermittlungsweg` ja/nein — "ja" only if identification+authentication met the legal bar; `Dokument` list with base64 **hash values**, algorithm SHA256/384/512) + **Technisch** (`HerstellerInformation`: product+version, vendor, `Registrierungs_ID`).
@@ -245,7 +245,7 @@ Certificates are **directory data, not protocol state**. OSCI-Transport itself h
 
 ## 6. Attachments and document formats (ERVB 2025)
 
-Hard limits and formats from **ERVB 2025** (local copy `docs/specs/ervb2025.pdf`):
+Hard limits and formats from **ERVB 2025** (source: ervb2025.pdf`):
 
 - **Max 1,000 files and max 200 MB (sum of attachment sizes) per message.** (Historic note: earlier bulletins were stricter; Behördenakten per BehAktÜbV: *soll* 200 MB / 1,000 files, but oversized transfers still count as validly filed if technically possible.)
 - **Formats:** PDF (incl. PDF 2.0, PDF/A-1, PDF/A-2, PDF/UA; no embedded objects, no JavaScript; inline signatures and Transfervermerke allowed; hyperlinks allowed) and **TIFF 6**. Documents must be printable.
@@ -310,7 +310,7 @@ From <https://egvp.justiz.de/Drittprodukte/index.php/index.php>:
 
 ### 8.3 Becoming a participant (the official route for a software product)
 
-1. Read *„Teilnahme von Drittanwendungen am OSCI-gestützten elektronischen Rechtsverkehr — Anforderungen, v1.8 (20.04.2022)"* (local copy `docs/specs/EGVP_Infrastruktur_Anforderungen_Teilnahme_von_Drittanwendungen.pdf`) — 25 requirements (A1–A25) incl. OSCI 1.2, message structure, VHN, XJustiz attachment, receipts, SAFE checks.
+1. Read *„Teilnahme von Drittanwendungen am OSCI-gestützten elektronischen Rechtsverkehr — Anforderungen, v1.8 (20.04.2022)"* (source: EGVP_Infrastruktur_Anforderungen_Teilnahme_von_Drittanwendungen.pdf`) — 25 requirements (A1–A25) incl. OSCI 1.2, message structure, VHN, XJustiz attachment, receipts, SAFE checks.
 2. Submit the **Antragsformular** (registration procedure) to the **Projektbüro der BLK-AG IT-Standards** — `it-standards@justiz.de` (also the XJustiz contact).
 3. Alternatively apply for **EGVP-Enterprise** (separate form) and integrate it as the transport component.
 4. The registration yields the `Registrierungs_ID` that your product must embed in every VHN 2 (`Technisch/HerstellerInformation`).
@@ -339,10 +339,10 @@ Recommended layering, bottom-up:
 
 1. **`safe-id` crate (pure, no I/O):** `SafeId` enum (legacy vs. modern format), domain enum (`BRAK`, `BEN_PROD`, `BNotK_Produktiv`, `Justiz`, `Other(String)`), UUID handling, **SHA-256 check-digit verification** (first two bytes of SHA-256 over lowercased ID prefix, hex), `FromStr`/`Display`/serde. Fully specified by the Abbildungsvorschrift; unit-testable offline.
 2. **`xjustiz` crate:** schema-derived types (generate from the official XSDs with `xsd-parser` or hand-write the Grunddatensatz subset: Nachrichtenkopf, Verfahrensdaten, Schriftgutobjekte), Schematron validation hook, `uebermittlungSchriftgutobjekte` builder, Dienststellen-ID **Werteliste Typ 3** (XRepository) as a bundled data table + refresh mechanism, DIN SPEC 91379 string normalization/validation. Test vectors: the spec's example instances + XJustiz-Werkzeuge as reference oracle.
-3. **`vhn` crate:** parse/validate `vhn.xml` (XSD in `docs/specs/VHN_2_2_Spezifikation.zip`), verify the CMS `p7s` (advanced signature) against the BNotK VHN CA hierarchy (root certificates from the BNotK online help), map `Sicherer_Uebermittlungsweg`, hash-check the Dokument list.
+3. **`vhn` crate:** parse/validate `vhn.xml` (XSD ships with the VHN 2 specification zip, see [`SPECIFICATIONS.md`](SPECIFICATIONS.md)), verify the CMS `p7s` (advanced signature) against the BNotK VHN CA hierarchy (root certificates from the BNotK online help), map `Sicherer_Uebermittlungsweg`, hash-check the Dokument list.
 4. **`safe-search` (SPML/VAS client):** typed model of the attribute table + role values + error codes from the v1.5 standard; SOAP/SPML 2.0 request construction; `search(criteria) -> Vec<SafeEntry>`, `lookup(SafeId | DienstellenId) -> SafeEntry`; feature-gated live transport. **Blocked on:** endpoint + credentials, obtainable only via Drittprodukt registration or EGVP-Enterprise embedding — plan an in-memory/mock directory for development (the standard's exact message shapes are in the spec's example).
 5. **`erv-message` (container layer):** build/parse the `project_coco`/`vhn_coco` structure, filename rules (90 chars, charset, signature pairing), the 1,000-file/200 MB checks, XJustiz attachment invariant. This is implementable and testable without ever touching OSCI.
-6. **OSCI-Transport client (the big lift, optional/later):** SOAP + XML-DSig/Enc, intermediary handshakes, Laufzettel parsing for Eingangs-/Abholbestätigung. **The specification is public and free** (ITZBund Bezugsstelle, local copies in `docs/specs/`, implementers explicitly granted a free simple usage right), and actively maintained (Korrigendum 10, Feb 2026). What does *not* exist publicly: a reference implementation to diff against, WSDLs of a test intermediary, and VAS endpoint access — so interop testing still realistically requires the Projektbüro/registration path or wrapping EGVP-Enterprise.
+6. **OSCI-Transport client (the big lift, optional/later):** SOAP + XML-DSig/Enc, intermediary handshakes, Laufzettel parsing for Eingangs-/Abholbestätigung. **The specification is public and free** (ITZBund Bezugsstelle; implementers are explicitly granted a free simple usage right), and actively maintained (Korrigendum 10, Feb 2026). What does *not* exist publicly: a reference implementation to diff against, WSDLs of a test intermediary, and VAS endpoint access — so interop testing still realistically requires the Projektbüro/registration path or wrapping EGVP-Enterprise.
 
 **Practical recommendation:** talk to the Projektbüro der BLK-AG IT-Standards (`it-standards@justiz.de`) early — both for VAS access and to clarify licensing of the OSCI-Transport specification for an independent (Rust) implementation. XJustiz and SAFE-ID work can start immediately with zero dependencies.
 
@@ -375,8 +375,8 @@ Recommended shape: safedir exposes `resolve(SafeId | DienststellenId) -> Resolve
 
 ## 11. Source index
 
-**Primary specifications (local copies in `docs/specs/`):**
-- OSCI-Transport 1.2 Spezifikation (Fassung 2002-06-06), Korrigendum 10 (2026-02-13), Ergänzung "Effiziente Übertragung großer Datenmengen" (2017-10-25) — free download: <https://www.itzbund.de/DE/itloesungen/standardloesungen/xoev/oscixoevbezugsstelle/oscixoevbezugsstelle.html>
+**Primary specifications:** (download locations in [`SPECIFICATIONS.md`](SPECIFICATIONS.md))
+- OSCI-Transport 1.2 Spezifikation (Fassung 2002-06-06), Korrigendum 10 (2026-02-13), Ergänzung — ITZBund OSCI/XÖV-Bezugsstelle: <https://www.itzbund.de/DE/itloesungen/standardloesungen/xoev/oscixoevbezugsstelle/oscixoevbezugsstelle.html>
 - Standard für die Suche in den SAFE-Verzeichnissen der ERV-Kommunikationsinfrastruktur, v1.5 (21.05.2026) — <https://egvp.justiz.de/Drittprodukte/Standard_SAFE_Verzeichnisdienst.pdf>
 - SAFE-ID Abbildungsvorschrift V2 (Juli 2017) — <https://egvp.justiz.de/Drittprodukte/SAFE_Abbildungsvorschrift_SAFE_ID_V2.pdf>
 - Vertrauenswürdiger Herkunftsnachweis (VHN) 2, Spezifikation v2.2 (09.12.2021) — <https://egvp.justiz.de/Drittprodukte/VHN_2_2_Spezifikation.zip>

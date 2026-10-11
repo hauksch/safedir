@@ -1,0 +1,29 @@
+name: audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, so new RustSec advisories surface without commit activity.
+    - cron: "23 4 * * 1"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@cargo-deny
+      # advisories (RustSec vulnerabilities + yanked), licenses, bans,
+      # sources — with every feature enabled, matching the real graph.
+      - run: cargo deny --all-features check --hide-inclusion-graph
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          artifact-name: sbom.cdx.json

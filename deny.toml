@@ -3,7 +3,11 @@ all-features = true
 
 [advisories]
 version = 2
-yanked = "warn"
+# A yanked dependency in the graph is a supply-chain red flag: fail.
+yanked = "deny"
+# Vulnerabilities are denied by default; unmaintained crates only warn so
+# routine archival does not break the build.
+unmaintained = "workspace"
 
 [licenses]
 version = 2

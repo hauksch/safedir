@@ -12,7 +12,7 @@
 //! offline from a versioned extract file, or live against the central
 //! *Virtueller Attribut-Service* (VAS) via OASIS SPML 2.0 (feature `vas`).
 //!
-//! Primary sources (archived under `docs/specs/` in the repository):
+//! Primary sources (download locations in `docs/SPECIFICATIONS.md`):
 //!
 //! - *Standard für die Suche in den SAFE-Verzeichnissen der
 //!   ERV-Kommunikationsinfrastruktur*, v1.5, BLK-AG IT-Standards, 21 May

@@ -11,7 +11,7 @@ name = "safedir"
 path = "src/main.rs"
 
 [dependencies]
-safedir.workspace = true
+safedir = { path = "../safedir", version = "0.1.0" }
 clap.workspace = true
 serde_json.workspace = true
 
