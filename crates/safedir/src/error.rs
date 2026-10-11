@@ -110,7 +110,8 @@ pub enum Error {
 
 impl Error {
     /// Suggested process exit code, mirroring the CLI contract:
-    /// `2` usage/config, `4` directory/extract, `5` internal.
+    /// `2` usage/config/parse, `4` directory/extract/network. (Code `5`
+    /// is reserved; nothing maps to it today.)
     #[must_use]
     pub fn exit_code(&self) -> i32 {
         match self {
@@ -160,7 +161,7 @@ pub enum ErrCode {
     /// The chosen search option is not allowed for this element.
     #[error("ERR50")]
     Err50,
-    /// The "Art der Suche" was not honoured.
+    /// An illegal Oder-search (OR combination) was performed.
     #[error("ERR60")]
     Err60,
     /// The search request is syntactically invalid.
@@ -174,55 +175,74 @@ pub enum ErrCode {
 
 impl ErrCode {
     /// The standard's German hint message for display to end users
-    /// (requirement: ERV-SES must show these).
+    /// (requirement: ERV-SES must show these). Texts follow Anlage a
+    /// verbatim; ERR10 carries an `(unerlaubtes Attribut)` placeholder
+    /// parameterizable via [`ErrCode::message_for`].
     #[must_use]
-    pub fn message(self) -> &'static str {
+    pub fn message(self) -> String {
+        self.message_for(None)
+    }
+
+    /// As [`ErrCode::message`], with the ERR10 placeholder filled in.
+    #[must_use]
+    pub fn message_for(self, attribute: Option<&str>) -> String {
         match self {
-            Self::Err10 => {
-                "Zu Ihrer Suche gibt es keinen Treffer, da die Suche nach diesem \
-                            Attribut nicht möglich ist. Bitte erstellen Sie eine neue Suchanfrage."
-            }
+            Self::Err10 => match attribute {
+                Some(attr) => "Zu Ihrer Suche gibt es keinen Treffer, da die Suche \
+                               nach (unerlaubtes Attribut) nicht möglich ist. Bitte \
+                               erstellen Sie eine neue Suchanfrage."
+                    .replace("(unerlaubtes Attribut)", attr),
+                None => "Zu Ihrer Suche gibt es keinen Treffer, da die Suche nach \
+                         diesem Attribut nicht möglich ist. Bitte erstellen Sie eine \
+                         neue Suchanfrage."
+                    .to_owned(),
+            },
             Self::Err11 => {
                 "Das Suchergebnis enthält keine Treffer zu nachfolgenden \
                             Postfachinhabern, da die Suche nach „Kanzlei“ für diese \
-                            Postfachinhaber nicht möglich ist."
+                            Postfachinhaber nicht möglich ist. Bitte erstellen Sie \
+                            eine neue Suchanfrage: Justiz, Gerichtsvollzieher, \
+                            Behörden, Bürger/Organisationen, Dolmetscher, \
+                            Patentanwälte.".to_owned()
             }
             Self::Err12 => {
                 "Das Suchergebnis enthält keine besonderen Postfächer, da die Suche \
-                            nach „Abteilung/Fachbereich“ bzw. „zu Händen von“ nicht möglich ist."
+                            nach „Abteilung/Fachbereich“ bzw. „zu Händen von“ nicht möglich ist.".to_owned()
             }
             Self::Err13 => {
                 "Das Suchergebnis enthält keine besonderen Postfächer, da die Suche \
-                            nach „Bundesland“ nicht möglich ist."
+                            nach „Bundesland“ nicht möglich ist.".to_owned()
             }
             Self::Err14 => {
                 "Das Suchergebnis enthält keine besonderen Postfächer, da die Suche \
-                            nach der „Dienststellen-ID“ nicht möglich ist."
+                            nach der „Dienststellen-ID“ nicht möglich ist.".to_owned()
             }
             Self::Err20 => {
                 "Das Postfach ist vorübergehend nicht adressierbar, da der \
-                            Rollenwert nicht freigeschaltet ist."
+                            Rollenwert nicht freigeschaltet ist.".to_owned()
             }
             Self::Err30 => {
                 "Die Suchanfrage enthielt zu wenig Zeichen. Bitte erstellen Sie \
-                            eine neue Suchanfrage."
+                            eine neue Suchanfrage.".to_owned()
             }
             Self::Err40 => {
                 "Die Anzahl der gefundenen Ergebnisse ist größer als 100. Bitte \
-                            konkretisieren Sie Ihre Suchanfrage."
+                            konkretisieren Sie Ihre Suchanfrage.".to_owned()
             }
             Self::Err50 => {
                 "Die gewählte Suchoption ist für dieses Element nicht zugelassen. \
-                            Bitte erstellen Sie eine neue Suchanfrage."
+                            Bitte erstellen Sie eine neue Suchanfrage.".to_owned()
             }
-            Self::Err60 => "Die gewählte Suchart wurde nicht beachtet.",
+            Self::Err60 => {
+                "Die von Ihnen gewählte Verknüpfung der Suchparameter ist nicht zugelassen. Bitte erstellen Sie eine neue Suchanfrage.".to_owned()
+            }
             Self::Err70 => {
                 "Die Suchanfrage kann technisch nicht ausgewertet werden. Bitte \
-                            erstellen Sie eine neue Suchanfrage."
+                            erstellen Sie eine neue Suchanfrage.".to_owned()
             }
             Self::Err100 => {
                 "Die Ergebnisliste ist möglicherweise nicht vollständig, da eines \
-                             der SAFE-Verzeichnisse nicht erreichbar war."
+                             der SAFE-Verzeichnisse nicht erreichbar war.".to_owned()
             }
         }
     }

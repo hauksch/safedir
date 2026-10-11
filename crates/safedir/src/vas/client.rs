@@ -80,11 +80,21 @@ impl SpmlResolver {
         // TLS-only, with an explicit loopback escape hatch for the mock
         // test server; redirects are never followed (a cross-host redirect
         // would re-present the mutual-TLS identity to a third party).
-        let https_only = config
-            .endpoint
-            .strip_prefix("http://")
-            .is_none_or(|rest| rest.starts_with("127.0.0.1") || rest.starts_with("localhost"));
-        if !https_only {
+        // The check runs on the *parsed* URL: string-prefix matching would
+        // let `HTTP://…` (scheme case) or `http://localhost.evil.example`
+        // through and leak the mutual-TLS identity over plain HTTP.
+        let is_loopback_http = config.endpoint.starts_with("http://")
+            && reqwest::Url::parse(&config.endpoint)
+                .ok()
+                .filter(|u| match u.host_str() {
+                    Some("localhost") | Some("::1") => true,
+                    Some(h) => h
+                        .parse::<std::net::Ipv4Addr>()
+                        .is_ok_and(|ip| ip.is_loopback()),
+                    _ => false,
+                })
+                .is_some();
+        if !config.endpoint.starts_with("https://") && !is_loopback_http {
             return Err(Error::Config(format!(
                 "VAS endpoint must use https (loopback http allowed for tests): {}",
                 config.endpoint
@@ -119,9 +129,16 @@ impl SpmlResolver {
             .send()
             .map_err(|e| Error::Network(format!("VAS request failed: {e}")))?;
         let status = response.status();
+        // Bounded read: the timeout bounds time, not bytes.
+        const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
         let body = response
             .text()
             .map_err(|e| Error::Network(format!("cannot read VAS response: {e}")))?;
+        if body.len() > MAX_RESPONSE_BYTES {
+            return Err(Error::Network(format!(
+                "VAS response exceeds {MAX_RESPONSE_BYTES} bytes"
+            )));
+        }
         if !status.is_success() {
             // SOAP servers answer 500 with a Fault body that may still
             // carry a typed ERR code — try to parse before giving up.
@@ -234,5 +251,12 @@ mod tests {
         // Loopback http is allowed (mock tests).
         assert!(SpmlResolver::new(SpmlConfig::new("http://127.0.0.1:9/soap")).is_ok());
         assert!(SpmlResolver::new(SpmlConfig::new("https://vas.example/soap")).is_ok());
+        // Bypass attempts must fail closed.
+        assert!(SpmlResolver::new(SpmlConfig::new("HTTP://vas.example/soap")).is_err());
+        assert!(SpmlResolver::new(SpmlConfig::new("http://localhost.evil.example/soap")).is_err());
+        assert!(SpmlResolver::new(SpmlConfig::new("http://127.0.0.1.evil.example/soap")).is_err());
+        assert!(
+            SpmlResolver::new(SpmlConfig::new("http://localhost:8080@evil.example/soap")).is_err()
+        );
     }
 }

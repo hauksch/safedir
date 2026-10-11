@@ -42,7 +42,10 @@ pub enum RoleValue {
     /// Gerichtsvollzieher, with replies possible (`buerger_rueck`).
     BuergerRueck,
     /// eBO organizations consenting to general electronic service
-    /// (§ 173 Abs. 4 S. 3 ZPOZustZustG) — additive to `egvp_ebo`.
+    /// (§ 173 Abs. 4 Satz 3 ZPO, eBO amendment; printed as "ZPOnF" in the
+    /// requirements paper, likely a PDF artifact) — additive to
+    /// `egvp_ebo`. Receiver-side it is seen by justiz and the
+    /// Gerichtsvollzieher roles.
     Zuzu,
     /// Test postboxes; visible only among themselves (`egvp_test`).
     EgvpTest,
@@ -57,7 +60,10 @@ pub enum RoleValue {
 }
 
 impl RoleValue {
-    /// Canonical token as used on the wire and in extracts.
+    /// Canonical token as used on the wire and in extracts. Casing follows
+    /// the v1.5 search standard (which spells `egvp_beA`/`egvp_beN`/
+    /// `egvp_beSt`/`egvp_beBPo`), overriding the requirements paper's
+    /// all-lowercase list; search matching is case-insensitive either way.
     #[must_use]
     pub fn token(&self) -> Cow<'static, str> {
         match self {

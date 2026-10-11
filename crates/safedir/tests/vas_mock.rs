@@ -17,11 +17,11 @@ const CERT_B64_SINGLE_LINE: &str = "MIIDYzCCAkugAwIBAgIUTnJAO9HFDyzIA5o/QRFja/vj
 
 fn pso(safe_id: &str, name: &str, ort: &str, role: &str) -> String {
     format!(
-        "<pso><psoID ID=\"{safe_id}\" targetID=\"urn:de:egov:names:safe:1.0:spml:2.0:targetid:egvpdata:id-sispp\"/>\
+        "<pso><psoID ID=\"{safe_id}\" targetID=\"urn:de:egov:names:safe:1.0:spml:2.0:targetid:egvpdata:id-sis-pp\"/>\
 <data><PP xmlns=\"urn:liberty:id-sis-pp:200505\">\
 <CommonName><AnalyzedName><SN>{name}</SN></AnalyzedName></CommonName>\
 <AddressCard><Address><L>{ort}</L></Address></AddressCard>\
-<MsgContact MsgTechnology=\"urn:de:egov:names:safe:1.0:idsis-pp:msgTechnology:osci12Postbox\">\
+<MsgContact MsgTechnology=\"urn:de:egov:names:safe:1.0:id-sis-pp:msgTechnology:osci12Postbox\">\
 <Extension><OsciMsgParameter>\
 <IntermedAddress>https://intermediaer.example/entry</IntermedAddress>\
 <IntermedEncryptKey>{CERT_B64_SINGLE_LINE}</IntermedEncryptKey>\
@@ -180,7 +180,7 @@ fn lookup_maps_entry_and_request_matches_standard_shape() {
     assert!(body.contains("urn:oasis:names:tc:SPML:2:0"));
     assert!(body.contains("returnData=\"everything\""));
     assert!(body.contains("DE.BRAK.bdda0cd6-ccdd-44a1-a42c-f13ced17235b.334d"));
-    assert!(body.contains("urn:de:egov:names:safe:1.0:spml:2.0:targetid:egvpdata:id-sispp"));
+    assert!(body.contains("urn:de:egov:names:safe:1.0:spml:2.0:targetid:egvpdata:id-sis-pp"));
 }
 
 #[test]

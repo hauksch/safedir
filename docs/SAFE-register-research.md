@@ -141,13 +141,13 @@ Source: *„Standard für die Suche in den SAFE-Verzeichnissen der ERV-Kommunika
 ### 3.5 Roles and the visibility matrix
 
 > **Verified 2026-10-11** by layout-aware extraction of the §5.3 table
-> (Anforderungspapier p. 19; rows = sender "sieht →", cross-validated
+> (Anforderungspapier p. 20; rows = sender "sieht →", cross-validated
 > against the per-role prose): `buerger` → behoerde/bebpo/justiz/rueck ·
 > `behoerde` → all except zuzu/test · `buerger_hin`/`buerger_rueck` → all
 > except test · `bea`/`ben`/`beSt` → behoerde/hin/rueck/bea/ben/beSt/bebpo/
 > ebo/ozg/justiz · `bebpo` → same plus buerger · `ebo`/`ozg_postfach` →
 > rueck/bea/ben/beSt/bebpo/justiz · `justiz` → all except test · `test` →
-> test only · `zuzu` → nothing (additive consent flag, no own row).
+> test only · `zuzu` → no own sender row (receiver-side: seen by justiz/GV).
 
 From the third-party requirements paper (§ 5.3, v1.8) — general role values:
 

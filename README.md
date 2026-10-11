@@ -3,7 +3,7 @@
 [![CI](https://github.com/hauksch/safedir/actions/workflows/ci.yml/badge.svg)](https://github.com/hauksch/safedir/actions/workflows/ci.yml)
 [![Supply chain](https://github.com/hauksch/safedir/actions/workflows/audit.yml/badge.svg)](https://github.com/hauksch/safedir/actions/workflows/audit.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Rust 1.85+](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust 1.88+](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org)
 [![deps: cargo-deny](https://img.shields.io/badge/dependencies-cargo--deny%20%2B%20SBOM-success.svg)](deny.toml)
 
 Resolve recipients in the German justice ERV (elektronischer Rechtsverkehr) by
@@ -66,7 +66,7 @@ safedir addressable egvp_beA dienststellen:301125T
 ```
 
 Exit codes: `0` ok · `2` usage/config/parse · `3` not found · `4` directory,
-extract, or network issues.
+extract, or network issues (and: not/conditionally addressable via `addressable`).
 
 With the `vas` feature (default in the CLI), `lookup` can go live instead of
 reading an extract:

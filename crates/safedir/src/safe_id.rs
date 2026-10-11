@@ -203,8 +203,13 @@ impl FromStr for SafeId {
             return Err(ParseSafeIdError::TooLong { limit: MAX_ID_LEN });
         }
         // Distinguishing rule: the modern format starts with a case-
-        // insensitive "DE." prefix; legacy IDs contain no dots.
-        let modern = raw.len() >= 3 && raw[..3].eq_ignore_ascii_case("DE.");
+        // insensitive "DE." prefix; legacy IDs contain no dots. Byte-wise
+        // compare: slicing `raw[..3]` would panic on multi-byte chars.
+        let modern = raw.len() >= 3
+            && raw
+                .as_bytes()
+                .get(..3)
+                .is_some_and(|b| b.eq_ignore_ascii_case(b"DE."));
         if modern {
             parse_modern(raw)
         } else {
@@ -519,6 +524,15 @@ mod tests {
     }
 
     const UUID: &str = "bdda0cd6-ccdd-44a1-a42c-f13ced17235b";
+
+    #[test]
+    fn rejects_non_ascii_without_panicking() {
+        // '€' spans bytes 1..=3: a naive raw[..3] slice would panic.
+        for input in ["a€bc", "€€€€", "ü", "äöü-123-456"] {
+            let _ = input.parse::<SafeId>(); // may err, must not panic
+        }
+        assert!("a€bc".parse::<SafeId>().is_err());
+    }
 
     #[test]
     fn serde_round_trip() {

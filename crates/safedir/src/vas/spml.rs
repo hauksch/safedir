@@ -8,7 +8,7 @@
 //! - SPML core: `urn:oasis:names:tc:SPML:2:0` (+ `…:search` for iterator
 //!   extensions),
 //! - DSMLv2: `urn:oasis:names:tc:DSML:2:0:core` (query expressions),
-//! - Liberty ID-SIS-PP profile data: `urn:liberty:id-sis-pp:200505`,
+//! - Liberty ID-SIS-PP profile data: `urn:liberty:id-sis-pp:2005-05`,
 //! - SAFE extensions: `urn:de:egov:names:safe:1.0:…`.
 
 use quick_xml::Reader;
@@ -19,10 +19,10 @@ use crate::error::{ErrCode, Error};
 
 /// SPML target of the SAFE "egvpdata" profile realm, from the standard's
 /// example.
-pub const TARGET_ID: &str = "urn:de:egov:names:safe:1.0:spml:2.0:targetid:egvpdata:id-sispp";
+pub const TARGET_ID: &str = "urn:de:egov:names:safe:1.0:spml:2.0:targetid:egvpdata:id-sis-pp";
 
 /// Liberty ID-SIS-PP namespace.
-pub const PP_NS: &str = "urn:liberty:id-sis-pp:200505";
+pub const PP_NS: &str = "urn:liberty:id-sis-pp:2005-05";
 
 /// DSMLv2 namespace.
 pub const DSML_NS: &str = "urn:oasis:names:tc:DSML:2:0:core";
@@ -226,8 +226,11 @@ pub fn parse_response(xml: &str) -> Result<SpmlResponse, Error> {
                     pso_level = Some(level);
                     current_pso_id = None;
                 } else if local == "psoID" && pso_level.is_some_and(|pl| level == pl + 1) {
-                    if let Some(v) = attr(&e, "ID") {
-                        current_pso_id = Some(v);
+                    if let Some(v) = attr(&e, "ID")
+                        && current_pso_id.replace(v.clone()).is_some()
+                    {
+                        warnings.push(format!("pso {v}: duplicate psoID — profile skipped"));
+                        current_pso_id = None;
                     }
                 } else if local == "data" && pso_level.is_some_and(|pl| level == pl + 1) {
                     in_data = true;
@@ -236,7 +239,10 @@ pub fn parse_response(xml: &str) -> Result<SpmlResponse, Error> {
                 } else if matches!(
                     local.as_str(),
                     "errorMessage" | "error" | "faultstring" | "faultcode" | "detail"
-                ) {
+                ) && response_level.is_some_and(|rl| level > rl)
+                {
+                    // Depth-scoped to the response subtree so stray
+                    // error-ish elements elsewhere cannot forge ERR codes.
                     in_error_message = true;
                 }
             }
@@ -244,6 +250,12 @@ pub fn parse_response(xml: &str) -> Result<SpmlResponse, Error> {
                 let local = local_name_start(&e);
                 if in_data {
                     push_start_tag(&mut data_buf, &e, true);
+                } else if local == "data" && pso_level.is_some_and(|pl| level == pl) {
+                    // Self-closing <data/>: an empty profile — record it
+                    // rather than silently yielding "not found".
+                    if let Some(id) = current_pso_id.take() {
+                        warnings.push(format!("pso {id}: empty <data/> element"));
+                    }
                 } else if local == "psoID" && pso_level.is_some_and(|pl| level == pl) {
                     // A self-closing psoID would sit one level below pso.
                     if let Some(v) = attr(&e, "ID") {
@@ -328,8 +340,29 @@ pub fn parse_response(xml: &str) -> Result<SpmlResponse, Error> {
         }
     }
 
+    if level != 0 || in_data {
+        // quick-xml does not error on elements still open at EOF; a
+        // response cut off mid-envelope would otherwise parse as a
+        // clean "success with 0 entries".
+        return Err(Error::Network(
+            "truncated SPML response: elements still open at end of input".to_owned(),
+        ));
+    }
+
     match status.as_deref() {
-        Some("success") | Some("pending") => Ok(SpmlResponse::Success(entries, warnings)),
+        Some("success") | Some("pending") => {
+            // A5: hint codes (ERR11-14, ERR100) can arrive inside a
+            // success response — surface them as notes instead of
+            // dropping them.
+            if let Some((code, _)) = ErrCode::from_message_text(&error_text) {
+                warnings.push(format!(
+                    "A5 hint from directory: {} {}",
+                    code,
+                    code.message()
+                ));
+            }
+            Ok(SpmlResponse::Success(entries, warnings))
+        }
         Some("failure") | None => {
             if let Some((code, msg)) = ErrCode::from_message_text(&error_text) {
                 return Ok(SpmlResponse::Failure(Some(code), msg));
@@ -478,7 +511,7 @@ mod tests {
 <pso><psoID ID=\"DE.BRAK.bdda0cd6-ccdd-44a1-a42c-f13ced17235b.334d\" targetID=\"x\"/>\
 <data><PP xmlns=\"urn:liberty:id-sis-pp:200505\">\
 <CommonName><AnalyzedName><FN>Max</FN><SN>Mustermann</SN></AnalyzedName></CommonName>\
-<MsgContact MsgTechnology=\"urn:de:egov:names:safe:1.0:idsis-pp:msgTechnology:osci12Postbox\">\
+<MsgContact MsgTechnology=\"urn:de:egov:names:safe:1.0:id-sis-pp:msgTechnology:osci12Postbox\">\
 <Extension><OsciMsgParameter>\
 <IntermedAddress>https://intermediaer.example/entry</IntermedAddress>\
 <IntermedEncryptKey>{cert_b64}</IntermedEncryptKey>\
@@ -521,7 +554,7 @@ mod tests {
 <pso><psoID ID=\"DE.BRAK.bdda0cd6-ccdd-44a1-a42c-f13ced17235b.334d\" targetID=\"x\"/>\
 <data><PP xmlns=\"urn:liberty:id-sis-pp:200505\">\
 <CommonName><AnalyzedName><SN>M&#252;ller</SN></AnalyzedName></CommonName>\
-<MsgContact MsgTechnology=\"urn:de:egov:names:safe:1.0:idsis-pp:msgTechnology:osci12Postbox\">\
+<MsgContact MsgTechnology=\"urn:de:egov:names:safe:1.0:id-sis-pp:msgTechnology:osci12Postbox\">\
 <Extension><OsciMsgParameter>\
 <IntermedAddress>https://intermediaer.example/entry</IntermedAddress>\
 <IntermedEncryptKey>{cert_b64}</IntermedEncryptKey>\
@@ -550,7 +583,7 @@ mod tests {
 <CommonName><AnalyzedName><SN>Mustermann</SN></AnalyzedName></CommonName>\
 <Adversarial><data><psoID ID=\"DE.Justiz.deadbeef-dead-beef-dead-beefdeadbeef.0000\"/>\
 <pso><data>hijack</data></pso></data></Adversarial>\
-<MsgContact MsgTechnology=\"urn:de:egov:names:safe:1.0:idsis-pp:msgTechnology:osci12Postbox\">\
+<MsgContact MsgTechnology=\"urn:de:egov:names:safe:1.0:id-sis-pp:msgTechnology:osci12Postbox\">\
 <Extension><OsciMsgParameter>\
 <IntermedAddress>https://real.example/entry</IntermedAddress>\
 <IntermedEncryptKey>{cert_b64}</IntermedEncryptKey>\
@@ -574,6 +607,27 @@ mod tests {
             }
             other => panic!("unexpected {other:?}"),
         }
+    }
+
+    #[test]
+    fn truncated_response_is_an_error_not_empty_success() {
+        // status already seen, elements still open at EOF.
+        let xml = "<?xml version=\"1.0\"?>\
+<S:Envelope xmlns:S=\"http://schemas.xmlsoap.org/soap/envelope/\"><S:Body>\
+<lookupResponse xmlns=\"urn:oasis:names:tc:SPML:2:0\" status=\"success\">\
+<pso><psoID ID=\"DE.BRAK.bdda0cd6-ccdd-44a1-a42c-f13ced17235b.334d\" targetID=\"x\"/>\
+<data><PP xmlns=\"urn:liberty:id-sis-pp:2005-05\"><CommonName>";
+        match parse_response(xml) {
+            Err(Error::Network(msg)) => assert!(msg.contains("truncated")),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn target_id_matches_spec_hyphenation() {
+        assert!(TARGET_ID.ends_with("id-sis-pp"));
+        assert!(!TARGET_ID.contains("id-sispp"));
+        assert!(PP_NS.ends_with("2005-05"));
     }
 
     #[test]
