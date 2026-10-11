@@ -11,3 +11,6 @@ docs/specs/
 
 # Local agent/tooling state
 .zcode/
+
+# Local agent/tooling state
+.zcodeignore
